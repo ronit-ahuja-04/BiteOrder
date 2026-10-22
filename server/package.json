@@ -1,0 +1,23 @@
+{
+  "name": "biteorder-server",
+  "version": "1.0.0",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "keywords": [
+    "biteorder",
+    "express",
+    "restaurant-api"
+  ],
+  "author": "Ronit Ahuja (Roll No. 63, D15A)",
+  "license": "ISC",
+  "description": "BiteOrder backend REST API for Restaurant Ordering & Management System",
+  "dependencies": {
+    "express": "^5.3.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  }
+}

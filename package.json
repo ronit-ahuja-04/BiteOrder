@@ -1,0 +1,21 @@
+{
+  "name": "biteorder",
+  "version": "1.0.0",
+  "description": "BiteOrder - Online Restaurant Ordering & Management System",
+  "private": true,
+  "scripts": {
+    "dev": "npm --prefix client run dev",
+    "build": "npm --prefix client run build",
+    "client": "npm --prefix client run dev",
+    "server": "node server/server.js"
+  },
+  "keywords": [
+    "restaurant-ordering",
+    "react",
+    "tailwind",
+    "vite",
+    "biteorder"
+  ],
+  "author": "Ronit Ahuja (Roll No. 63, D15A)",
+  "license": "ISC"
+}
