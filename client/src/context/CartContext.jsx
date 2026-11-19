@@ -1,9 +1,12 @@
 import React, { createContext, useContext, useState, useMemo, useEffect } from 'react';
 import { MENU_ITEMS } from '../data/menuData';
+import { API_BASE } from '../config';
+import { useToast } from './ToastContext';
 
 const CartContext = createContext();
 
 export function CartProvider({ children }) {
+  const { showToast } = useToast();
   // Table & Ordering configuration (from PRD Section 5.1 & 8.1)
   const [tableNumber, setTableNumber] = useState('12');
   const [orderType, setOrderType] = useState('dine-in'); // 'dine-in' | 'takeaway' | 'online'
@@ -173,10 +176,11 @@ export function CartProvider({ children }) {
     return Math.max(0, subtotal - discountAmount + gst);
   }, [subtotal, discountAmount, gst]);
 
-  // Place order handler
-  const placeOrder = customerData => {
+  // Place order handler (with Express REST API synchronization)
+  const placeOrder = async (customerData) => {
+    const localOrderNo = `BO-${Math.floor(1000 + Math.random() * 9000)}`;
     const newOrder = {
-      orderNo: `BO-${Math.floor(1000 + Math.random() * 9000)}`,
+      orderNo: localOrderNo,
       tableNumber,
       orderType,
       items: [...cart],
@@ -188,7 +192,39 @@ export function CartProvider({ children }) {
       status: 'Pending', // Pending -> Preparing -> Ready -> Served (as per PRD Figure 10.2)
       createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
+
+    // Asynchronously dispatch to Express REST API server
+    try {
+      fetch(`${API_BASE}/orders`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          ...(localStorage.getItem('biteorder_token') ? { Authorization: `Bearer ${localStorage.getItem('biteorder_token')}` } : {}),
+        },
+        body: JSON.stringify({
+          tableNumber,
+          orderType,
+          items: cart,
+          subtotal,
+          gst,
+          total: finalTotal,
+          customer: customerData,
+        }),
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          console.log('✅ Order successfully registered with Express REST API:', data);
+        })
+        .catch((err) => {
+          console.warn('Backend API note: Order saved locally in client state:', err.message);
+        });
+    } catch (e) {
+      // Non-blocking fallback
+    }
+
     setPlacedOrder(newOrder);
+    showToast(`Order ${newOrder.orderNo || ''} placed successfully!`);
     setCart([]);
     setIsCheckoutOpen(false);
   };

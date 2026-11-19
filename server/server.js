@@ -1,29 +1,43 @@
-const express = require('express');
-const app = express();
-const menuRoutes = require('./routes/menuRoutes');
+require('dotenv').config({ quiet: true });
+const http = require('http');
+const { Server } = require('socket.io');
+const app = require('./app');
+const connectDB = require('./config/db');
+const ensureAdmin = require('./config/ensureAdmin');
 
-// Middleware to parse incoming JSON
-app.use(express.json());
+// Socket.IO needs the raw HTTP server (Express alone is not enough)
+const httpServer = http.createServer(app);
+const origins = (process.env.CLIENT_ORIGIN || '').split(',').map((s) => s.trim()).filter(Boolean);
+const io = new Server(httpServer, {
+  cors: { origin: origins.length ? origins : '*', methods: ['GET', 'POST'] },
+});
 
-// Basic health check route
-app.get('/', (req, res) => {
-  res.status(200).json({
-    message: 'BiteOrder Restaurant API running',
-    version: '1.0.0',
-    endpoints: ['/api/menu', '/api/categories', '/api/orders'],
+// Make io available inside controllers via req.app.get('io')
+app.set('io', io);
+
+// Handle client connections and disconnections
+io.on('connection', (socket) => {
+  console.log(`🔌 Client connected:    ${socket.id}  (online: ${io.engine.clientsCount})`);
+  socket.emit('welcome', { message: 'Connected to BiteOrder live updates', id: socket.id });
+
+  socket.on('disconnect', (reason) => {
+    console.log(`❌ Client disconnected: ${socket.id}  (reason: ${reason}, online: ${io.engine.clientsCount})`);
   });
 });
 
-// API Routes
-app.use('/api', menuRoutes);
-
-// 404 Handler
-app.use((req, res) => {
-  res.status(404).json({ message: 'Resource not found' });
+const PORT = process.env.PORT || 5001;
+connectDB().then(ensureAdmin).then(() => {
+  httpServer.listen(PORT, () => {
+    console.log('===================================================');
+    console.log(`🚀 BiteOrder API Server running at: http://localhost:${PORT}`);
+    console.log(`📖 REST Endpoints: http://localhost:${PORT}/api/menu`);
+    console.log('===================================================');
+  });
 });
 
-// Port configuration
-const PORT = process.env.PORT || 5001;
-app.listen(PORT, () => {
-  console.log(`🚀 BiteOrder API Server running at http://localhost:${PORT}`);
+// Graceful shutdown (Docker / Render send SIGTERM)
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received – closing server');
+  io.close();
+  httpServer.close(() => process.exit(0));
 });

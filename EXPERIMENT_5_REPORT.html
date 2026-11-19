@@ -1,0 +1,167 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>Experiment 5</title><style>@page{size:A4;margin:18mm}body{font:11pt/1.4 Arial,Helvetica,sans-serif;color:#000;margin:0}h1{font-size:18pt;margin:0 0 8px}h2{font-size:14pt;margin:18px 0 6px;break-after:avoid}h3{font-size:12pt;margin:14px 0 6px;break-after:avoid}p{margin:0 0 6px}ul{margin:0 0 6px;padding-left:22px}li{margin:0 0 3px}code{font-family:Courier New,monospace;font-size:10pt}pre{font:8.5pt/1.25 Courier New,monospace;background:#f3f3f3;padding:6px 8px;margin:4px 0;white-space:pre-wrap;word-break:break-word}pre code{font-size:8.5pt}table{border-collapse:collapse;width:100%;margin:4px 0;break-inside:avoid}th,td{border:1px solid #000;padding:3px 6px;text-align:left;vertical-align:top;font-size:10.5pt}p.lab{font-weight:bold;margin:12px 0 4px;break-after:avoid}.pb{break-after:page}.shot{break-inside:avoid;margin:2px 0 10px}.shot img{max-width:100%;border:1px solid #bbb}</style></head><body><h1>Experiment – 5</h1><p><b>Integration of MongoDB and Mongoose with RESTful APIs</b></p><table><tr><th>Field</th><th>Details</th></tr><tr><td>Student Name</td><td>Ronit Ahuja</td></tr><tr><td>Class &amp; Division</td><td>D15A</td></tr><tr><td>Roll Number</td><td>63</td></tr><tr><td>Date</td><td>11/11/26</td></tr><tr><td>Project</td><td>BiteOrder – Online Restaurant Ordering &amp; Management System</td></tr><tr><td>Technology Stack</td><td>Node.js, Express.js, MongoDB, Mongoose</td></tr></table><h2>1. Aim</h2>
+<p>To integrate MongoDB with the existing BiteOrder RESTful API using Mongoose, implement persistent CRUD operations, and test the APIs using Postman.</p>
+<h2>2. Problem Statement</h2>
+<p>Extend the BiteOrder Restaurant Ordering System API by replacing the in-memory <code>menuItems</code> / <code>orders</code> arrays with MongoDB. Configure MongoDB Atlas, connect Express using Mongoose, implement CRUD operations, test with Postman, and display database records in the React frontend.</p>
+<h2>3. Theory Questions</h2>
+<p><strong>1. What is MongoDB Atlas, and why is it used?</strong>
+MongoDB Atlas is MongoDB&#39;s fully managed cloud database service. It hosts clusters on AWS/GCP/Azure and handles provisioning, backups, scaling, monitoring and security (IP allow-list, users, TLS), so developers do not install or maintain database servers. It has a free tier, which suits development and academic projects.</p>
+<p><strong>2. What is Mongoose? Explain the purpose of schemas and models.</strong>
+Mongoose is an ODM (Object Data Modeling) library for MongoDB and Node.js. A <strong>schema</strong> defines the structure of documents in a collection: field types, defaults, and validation rules (<code>required</code>, <code>min</code>, <code>enum</code>). A <strong>model</strong> is a class compiled from a schema (<code>mongoose.model(&#39;MenuItem&#39;, menuItemSchema)</code>) that provides the methods to query and modify the collection (<code>find</code>, <code>create</code>, …).</p>
+<p><strong>3. What is the purpose of <code>MONGODB_URI</code> and <code>mongoose.connect()</code>?</strong>
+<code>MONGODB_URI</code> is the connection string (host, credentials, database name, options) stored as an environment variable. <code>mongoose.connect(uri)</code> opens the connection pool to that database; all models use this connection for their operations.</p>
+<p><strong>4. Differentiate between in-memory storage and MongoDB storage.</strong></p>
+<table>
+<thead>
+<tr>
+<th>In-memory (arrays)</th>
+<th>MongoDB</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Data lives in RAM; lost on every server restart</td>
+<td>Persisted on disk; survives restarts</td>
+</tr>
+<tr>
+<td>Single process only</td>
+<td>Shared by many servers/clients</td>
+</tr>
+<tr>
+<td>No validation, manual ID generation</td>
+<td>Schema validation, auto <code>ObjectId</code></td>
+</tr>
+<tr>
+<td>Linear scans with <code>filter</code>/<code>find</code></td>
+<td>Indexed, query-optimised</td>
+</tr>
+<tr>
+<td>Not scalable</td>
+<td>Scalable (replication, sharding)</td>
+</tr>
+</tbody></table>
+<p><strong>5. Purpose of the Mongoose methods</strong></p>
+<ul>
+<li><code>find(filter)</code> – returns all documents matching the filter (all if empty).</li>
+<li><code>findById(id)</code> – returns one document by its <code>_id</code>, or <code>null</code>.</li>
+<li><code>create(data)</code> – validates and inserts a new document.</li>
+<li><code>findByIdAndUpdate(id, update, {returnDocument:&#39;after&#39;, runValidators:true})</code> – updates a document and returns the updated version.</li>
+<li><code>findByIdAndDelete(id)</code> – removes a document and returns the deleted one.</li>
+</ul>
+<p><strong>6. What is MongoDB ObjectId?</strong>
+A 12-byte (24 hex characters) unique identifier automatically assigned as <code>_id</code> to each document. It contains a timestamp, random value and counter, so it is unique across machines without a central counter and roughly sortable by creation time.</p>
+<p><strong>7. Why should database credentials be stored in a <code>.env</code> file?</strong>
+Credentials hard-coded in source end up in Git history and public repositories, where they can be stolen and abused. <code>.env</code> keeps secrets outside the code, is listed in <code>.gitignore</code>, and lets each environment (dev/test/prod) use different values without code changes. Only <code>.env.example</code> (placeholders) is committed.</p>
+<hr>
+<h2>4. Code</h2>
+<h3>4.1 MongoDB Atlas configuration</h3>
+<ol>
+<li>Create a free <strong>M0 cluster</strong> on MongoDB Atlas.</li>
+<li><em>Database Access</em> → add a database user.</li>
+<li><em>Network Access</em> → allow your IP (or <code>0.0.0.0/0</code> for development).</li>
+<li><em>Connect → Drivers</em> → copy the connection string into <code>server/.env</code>.</li>
+</ol>
+<h3>4.2 <code>.env</code> and <code>config/db.js</code></h3>
+<p><code>server/.env</code> (never committed – see <code>.env.example</code>):</p>
+<pre><code class="language-env">PORT=5001
+MONGODB_URI=mongodb+srv://&lt;username&gt;:&lt;password&gt;@&lt;cluster&gt;.mongodb.net/biteorder?retryWrites=true&amp;w=majority
+</code></pre>
+<p><code>server/config/db.js</code>:</p>
+<pre><code class="language-js">const mongoose = require(&#39;mongoose&#39;);
+
+const connectDB = async () =&gt; {
+  const uri = process.env.MONGODB_URI;
+  if (!uri) {
+    console.error(&#39;❌ MONGODB_URI is not defined. Copy .env.example to .env and set it.&#39;);
+    process.exit(1);
+  }
+  try {
+    const conn = await mongoose.connect(uri);
+    console.log(`✅ MongoDB Connected: ${conn.connection.host} (db: ${conn.connection.name})`);
+  } catch (error) {
+    console.error(&#39;❌ MongoDB connection failed:&#39;, error.message);
+    process.exit(1);
+  }
+};
+module.exports = connectDB;
+</code></pre>
+<p><code>server/server.js</code> loads <code>dotenv</code>, connects first, and starts listening only after the DB is ready:</p>
+<pre><code class="language-js">require(&#39;dotenv&#39;).config({ quiet: true });
+...
+connectDB().then(() =&gt; app.listen(PORT, () =&gt; console.log(`🚀 Server on ${PORT}`)));
+</code></pre>
+<h3>4.3 Schema and model – <code>models/MenuItem.js</code> (the &quot;Event&quot; equivalent)</h3>
+<pre><code class="language-js">const menuItemSchema = new mongoose.Schema({
+  name:     { type: String, required: [true, &#39;&quot;name&quot; is a required field.&#39;], trim: true },
+  category: { type: String, required: true, trim: true, lowercase: true,
+              enum: [&#39;starters&#39;,&#39;mains&#39;,&#39;breads&#39;,&#39;desserts&#39;,&#39;beverages&#39;] },
+  price:    { type: Number, required: true, min: [1, &#39;&quot;price&quot; must be a positive number.&#39;] },
+  halfPrice: Number,
+  isVeg: { type: Boolean, default: true },
+  description: { type: String, default: &#39;Delicious handcrafted chef specialty dish.&#39; },
+  image, rating, ratingCount, prepTime, calories, isBestseller, isChefSpecial,
+  availableAddons: [addonSchema],
+}, { timestamps: true });
+
+module.exports = mongoose.model(&#39;MenuItem&#39;, menuItemSchema);
+</code></pre>
+<p>A second model, <code>models/Order.js</code>, stores placed orders (<code>orderId</code>, <code>items</code>, <code>total</code>, <code>status</code> enum, <code>customer</code>).</p>
+<h3>4.4 Five CRUD operations – <code>controllers/menuController.js</code></h3>
+<pre><code class="language-js">// READ ALL   GET /api/menu
+const items = await MenuItem.find(filter).sort({ createdAt: 1 });
+
+// READ ONE   GET /api/menu/:id
+const item = await MenuItem.findById(req.params.id);
+
+// CREATE     POST /api/menu
+const item = await MenuItem.create(body);                       // 201
+
+// UPDATE     PUT /api/menu/:id
+const item = await MenuItem.findByIdAndUpdate(req.params.id, updates,
+                                              { returnDocument: &#39;after&#39;, runValidators: true });
+
+// DELETE     DELETE /api/menu/:id
+const item = await MenuItem.findByIdAndDelete(req.params.id);
+</code></pre>
+<h3>4.5 Validation and error handling</h3>
+<pre><code class="language-js">const isValidId = (id) =&gt; mongoose.Types.ObjectId.isValid(id);   // 400 for malformed ObjectId
+
+const handleError = (res, error, fallback) =&gt; {
+  if (error.name === &#39;ValidationError&#39;)                           // schema rule violated → 400
+    return res.status(400).json({ success: false,
+      message: `Validation Error: ${Object.values(error.errors).map(e =&gt; e.message).join(&#39; &#39;)}` });
+  if (error.name === &#39;CastError&#39;)                                 // wrong type → 400
+    return res.status(400).json({ success: false, message: `Invalid value for &quot;${error.path}&quot;` });
+  res.status(500).json({ success: false, message: fallback, error: error.message });
+};
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Case</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Missing/invalid fields, malformed ObjectId</td>
+<td>400</td>
+</tr>
+<tr>
+<td>Valid ObjectId that does not exist</td>
+<td>404</td>
+</tr>
+<tr>
+<td>Created</td>
+<td>201</td>
+</tr>
+<tr>
+<td>Unexpected DB error</td>
+<td>500</td>
+</tr>
+</tbody></table>
+<h3>4.6 React frontend integration</h3>
+<p><code>client/src/pages/MenuPage.jsx</code> fetches <code>GET http://localhost:5001/api/menu</code> on mount and renders the documents stored in MongoDB. The model&#39;s <code>toJSON</code> transform exposes <code>_id</code> as a string <code>id</code>, so cart/menu components work unchanged with ObjectIds. Orders placed at checkout are saved via <code>POST /api/orders</code> into the <code>orders</code> collection.</p>
+<h3>4.7 Seeding</h3>
+<p><code>npm run seed</code> (in <code>server/</code>) inserts the 12 original dishes into the <code>menuitems</code> collection.</p>
+<hr>
+<div class="pb"></div><h2>5. Screenshots</h2><p>Note: screenshots 2–9 were captured from a local run of the application against a local MongoDB instance. The same code runs against MongoDB Atlas by setting MONGODB_URI in server/.env.</p><h3>A. MongoDB Configuration</h3><div class="shot"><p class="lab">1. MongoDB Atlas cluster and collection</p><p>[Attach screenshot of MongoDB Atlas cluster and collection here]</p></div><div class="shot"><p class="lab">2. Successful database connection in the server terminal</p><img src="file:///Users/ronitahuja/Desktop/FSD/Restaurant ordering system/screenshots/exp-5/02_db_connected.png" style="width:640px"></div><h3>B. Postman API Testing</h3><div class="shot"><p class="lab">3. GET – Retrieve all events (menu items)</p><img src="file:///Users/ronitahuja/Desktop/FSD/Restaurant ordering system/screenshots/exp-5/03_get_all.png" style="width:640px"></div><div class="shot"><p class="lab">4. GET – Retrieve an event by ID</p><img src="file:///Users/ronitahuja/Desktop/FSD/Restaurant ordering system/screenshots/exp-5/04_get_by_id.png" style="width:640px"></div><div class="shot"><p class="lab">5. POST – Create an event</p><img src="file:///Users/ronitahuja/Desktop/FSD/Restaurant ordering system/screenshots/exp-5/05_post_create.png" style="width:640px"></div><div class="shot"><p class="lab">6. PUT – Update an event</p><img src="file:///Users/ronitahuja/Desktop/FSD/Restaurant ordering system/screenshots/exp-5/06_put_update.png" style="width:640px"></div><div class="shot"><p class="lab">7. DELETE – Delete an event</p><img src="file:///Users/ronitahuja/Desktop/FSD/Restaurant ordering system/screenshots/exp-5/07_delete.png" style="width:640px"></div><div class="shot"><p class="lab">8. Invalid request – validation error (400)</p><img src="file:///Users/ronitahuja/Desktop/FSD/Restaurant ordering system/screenshots/exp-5/08_error_validation.png" style="width:640px"></div><div class="shot"><p class="lab">8. Invalid request – malformed ObjectId (400)</p><img src="file:///Users/ronitahuja/Desktop/FSD/Restaurant ordering system/screenshots/exp-5/08b_error_badid.png" style="width:640px"></div><div class="shot"><p class="lab">8. Invalid request – ID not found (404)</p><img src="file:///Users/ronitahuja/Desktop/FSD/Restaurant ordering system/screenshots/exp-5/08c_error_notfound.png" style="width:640px"></div><h3>C. Frontend Integration</h3><div class="shot"><p class="lab">9. React frontend displaying events retrieved from MongoDB</p><img src="file:///Users/ronitahuja/Desktop/FSD/Restaurant ordering system/screenshots/exp-5/09_frontend.png" style="width:380px"></div><h2>6. Conclusion</h2>
+<p>The BiteOrder API now persists menu items and orders in MongoDB Atlas via Mongoose. Schemas enforce validation, all five CRUD operations work with ObjectIds, errors return meaningful 400/404/500 responses, secrets are kept in <code>.env</code>, and the React frontend renders live database records.</p>
+</body></html>

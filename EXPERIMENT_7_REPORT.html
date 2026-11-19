@@ -1,0 +1,281 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>Experiment 7</title><style>@page{size:A4;margin:18mm}body{font:11pt/1.4 Arial,Helvetica,sans-serif;color:#000;margin:0}h1{font-size:18pt;margin:0 0 8px}h2{font-size:14pt;margin:18px 0 6px}h3{font-size:12pt;margin:14px 0 6px;break-after:avoid}h2{break-after:avoid}p{margin:0 0 6px}p.q{font-weight:bold;margin:10px 0 3px;break-after:avoid}p.lab{font-weight:bold;margin:12px 0 4px;break-after:avoid}.li{margin:0 0 3px 22px}code{font-family:Courier New,monospace;font-size:10pt}pre{font:8.5pt/1.25 Courier New,monospace;background:#f3f3f3;padding:6px 8px;margin:4px 0;white-space:pre-wrap;word-break:break-word}table{border-collapse:collapse;width:100%;margin:4px 0;break-inside:avoid}th,td{border:1px solid #000;padding:3px 6px;text-align:left;vertical-align:top;font-size:10.5pt}.gap{height:8px}.pb{break-after:page}.shot{break-inside:avoid;margin:2px 0 10px}.shot img{max-width:100%;border:1px solid #bbb}</style></head><body><h1>Experiment – 7</h1>
+<p><b>Implementation of Real-Time Features using WebSockets and Socket.IO</b></p>
+<table><tr><th>Field</th><th>Details</th></tr><tr><td>Student Name</td><td>Ronit Ahuja</td></tr><tr><td>Class &amp; Division</td><td>D15A</td></tr><tr><td>Roll Number</td><td>63</td></tr><tr><td>Date</td><td>14/11/2026</td></tr><tr><td>Project</td><td>BiteOrder – Online Restaurant Ordering &amp; Management System (Mini Project)</td></tr><tr><td>Technology Stack</td><td>React, Node.js, Express.js, MongoDB, Socket.IO, socket.io-client</td></tr></table>
+<h2>1. Aim</h2>
+<p>To implement real-time communication in a web application using WebSockets and Socket.IO by establishing a connection between the React frontend and the Node.js backend and implementing real-time event notifications.</p>
+<h2>2. Problem Statement</h2>
+<p>Implement real-time communication in the BiteOrder restaurant ordering system (mini project) using Socket.IO. Develop a real-time notification system that notifies all connected customers whenever an administrator creates, updates or deletes a menu item. Integrate Socket.IO with the Express.js backend and the React frontend, handle client connections and disconnections, and display notifications dynamically (toast pop-up, notification bell and live menu refresh) without requiring users to refresh the page.</p>
+<h2>3. Theory Questions</h2>
+<p class="q">1. What are WebSockets? Explain their purpose.</p>
+<p>WebSocket is a communication protocol (RFC 6455) that provides a persistent, full-duplex connection between a client and a server over a single TCP connection. The connection starts as an HTTP request that is "upgraded" to WebSocket, after which both sides can send messages to each other at any time.</p>
+<p>Purpose: real-time, low-latency, two-way communication – chat, live notifications, live dashboards, multiplayer games – without the client having to keep polling the server.</p>
+<p class="q">2. What is Socket.IO? How is it different from WebSockets?</p>
+<p>Socket.IO is a JavaScript library (server: socket.io, client: socket.io-client) for real-time, event-based, bidirectional communication. It uses WebSocket when available and falls back to HTTP long-polling when it is not.</p>
+<div class="li">&bull; <b>WebSocket</b> is only a low-level protocol: raw messages, no built-in reconnection, rooms or events.</div>
+<div class="li">&bull; <b>Socket.IO</b> is a library built on top of it: named events (emit/on), automatic reconnection, heartbeat (ping/pong), rooms and namespaces, broadcasting, acknowledgements and transport fallback. A Socket.IO client can only talk to a Socket.IO server, not to a plain WebSocket server.</div>
+<p class="q">3. Differentiate between HTTP communication and WebSocket communication.</p>
+<table><tr><th>Feature</th><th>HTTP</th><th>WebSocket</th></tr><tr><td>Connection</td><td>New request/response each time (connection closes after response)</td><td>One persistent connection that stays open</td></tr><tr><td>Direction</td><td>Client-initiated; server can only reply</td><td>Full-duplex; both client and server can send at any time</td></tr><tr><td>Real-time updates</td><td>Needs polling or refresh</td><td>Server pushes data instantly</td></tr><tr><td>Overhead</td><td>Headers sent with every request</td><td>Small frames after the initial handshake</td></tr><tr><td>Typical use</td><td>REST APIs, loading pages, form submits</td><td>Chat, notifications, live dashboards, games</td></tr></table>
+<div class="gap"></div>
+<p class="q">4. What is the purpose of socket.io and socket.io-client?</p>
+<p><b>socket.io</b> is installed in the Node.js backend. It attaches to the HTTP server, accepts client connections, and lets the server listen for and emit events (for example io.emit("notification", data)).</p>
+<p><b>socket.io-client</b> is installed in the React frontend. It opens the connection to the server (io(url)), listens for events with socket.on() and can send events with socket.emit().</p>
+<p class="q">5. Explain the purpose of io.on("connection") in Socket.IO.</p>
+<p>io.on("connection", callback) registers a handler that runs every time a new client connects. The callback receives that client's <b>socket</b> object, which has a unique socket.id and is used to listen for that client's events (socket.on) and to send events to it (socket.emit). It is also the place to log connections and attach the "disconnect" handler.</p>
+<p class="q">6. What is the difference between socket.emit() and io.emit()?</p>
+<p><b>socket.emit()</b> sends an event only to the one client represented by that socket (for example a private welcome message). <b>io.emit()</b> broadcasts an event to every connected client. In this project, the welcome message uses socket.emit() and the menu notifications use io.emit(), so all users see them.</p>
+<p>Related: socket.broadcast.emit() sends to everyone except the sender.</p>
+<p class="q">7. What are connection and disconnection events in Socket.IO?</p>
+<p><b>connection</b> (server) / <b>connect</b> (client) fires when the connection is established. <b>disconnect</b> fires when it ends – because the user closed the tab, lost network, called socket.disconnect(), or the server shut down; it gives a reason such as "transport close" or "ping timeout". Handling them lets us log online users, update UI status (the green/grey dot on the bell) and clean up resources.</p>
+<p class="q">8. Why is useEffect() used when integrating Socket.IO with React?</p>
+<p>Opening a socket and registering listeners are side effects and must not run on every render. useEffect with an empty dependency array runs once when the component mounts, so the connection is created once. Its <b>cleanup function</b> (the returned function) removes the listeners and disconnects when the component unmounts, which prevents duplicate listeners, memory leaks and duplicate notifications.</p>
+<p class="q">9. What is the purpose of socket.off() and socket.disconnect()?</p>
+<p><b>socket.off(event, handler)</b> removes a specific event listener so the handler is no longer called – used in the useEffect cleanup to avoid registering the same listener repeatedly. <b>socket.disconnect()</b> manually closes the connection to the server (the server then logs a "disconnect" event) – used when the component or application is closed or the user logs out.</p>
+<p class="q">10. Explain how real-time notifications improve an Event Management System.</p>
+<p>In an event management system (and here, a restaurant menu system) users see changes the moment an administrator makes them. They do not need to refresh or keep polling, so they never act on stale information – a new event or dish appears immediately, a changed price or time is visible at once, and a cancelled or removed item disappears. This improves user experience and engagement, reduces unnecessary HTTP requests to the server, and lets administrators communicate urgent changes instantly. In BiteOrder, customers see new dishes, price changes and removed dishes live, and the menu refreshes itself.</p>
+<div class="pb"></div>
+<h2>4. Code</h2>
+<h3>4.1 Installing Socket.IO dependencies</h3>
+<pre># backend (server folder)
+npm install socket.io
+
+# frontend (client folder)
+npm install socket.io-client</pre>
+<h3>4.2 HTTP server and Socket.IO configuration (server/server.js)</h3>
+<p>Socket.IO needs the raw HTTP server, so the Express app is wrapped with http.createServer(). The io instance is stored in the app with app.set("io", io) so controllers can use it. The server starts with httpServer.listen() instead of app.listen().</p>
+<pre>const http = require('http');
+const express = require('express');
+const { Server } = require('socket.io');
+const connectDB = require('./config/db');
+const app = express();
+
+// Socket.IO needs the raw HTTP server (Express alone is not enough)
+const httpServer = http.createServer(app);
+const io = new Server(httpServer, {
+  cors: { origin: '*', methods: ['GET', 'POST'] },
+});
+
+// Make io available inside controllers via req.app.get('io')
+app.set('io', io);
+
+// Handle client connections and disconnections
+io.on('connection', (socket) => {
+  console.log(`🔌 Client connected:    ${socket.id}  (online: ${io.engine.clientsCount})`);
+  socket.emit('welcome', { message: 'Connected to BiteOrder live updates', id: socket.id });
+
+  socket.on('disconnect', (reason) => {
+    console.log(`❌ Client disconnected: ${socket.id}  (reason: ${reason}, online: ${io.engine.clientsCount})`);
+  });
+});</pre>
+<div class="gap"></div>
+<pre>connectDB().then(() => {
+  httpServer.listen(PORT, () => {   // was app.listen(PORT, ...)
+    console.log('BiteOrder API Server running at: http://localhost:' + PORT);
+  });
+});</pre>
+<h3>4.3 Handling client connection and disconnection</h3>
+<pre>// Handle client connections and disconnections
+io.on('connection', (socket) => {
+  console.log(`🔌 Client connected:    ${socket.id}  (online: ${io.engine.clientsCount})`);
+  socket.emit('welcome', { message: 'Connected to BiteOrder live updates', id: socket.id });
+
+  socket.on('disconnect', (reason) => {
+    console.log(`❌ Client disconnected: ${socket.id}  (reason: ${reason}, online: ${io.engine.clientsCount})`);
+  });
+});</pre>
+<h3>4.4 Accessing Socket.IO in controllers and emitting notifications (server/controllers/menuController.js)</h3>
+<p>The controller gets the same io instance with req.app.get("io") and broadcasts a notification to all clients with io.emit().</p>
+<pre>// Broadcast a real-time notification to every connected client (Experiment 7)
+const notifyClients = (req, type, item, message) => {
+  const io = req.app.get('io');
+  if (!io) return;
+  io.emit('notification', {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    type, // 'created' | 'updated' | 'deleted'
+    message,
+    item: { id: String(item._id), name: item.name, category: item.category, price: item.price },
+    by: req.user ? req.user.name : 'Admin',
+    timestamp: new Date().toISOString(),
+  });
+};</pre>
+<div class="gap"></div>
+<p>Emitting after each admin operation (create, update, delete):</p>
+<pre>// createMenuItem
+const item = await MenuItem.create(body);
+notifyClients(req, 'created', item, `New dish added: ${item.name} (₹${item.price})`);
+
+// updateMenuItem
+notifyClients(req, 'updated', item, `Dish updated: ${item.name} is now ₹${item.price}`);
+
+// deleteMenuItem
+notifyClients(req, 'deleted', item, `Dish removed from the menu: ${item.name}`);</pre>
+<p>These controllers are reached only through the admin-only routes created in Experiment 6 (protect + adminOnly), so only administrators can trigger notifications.</p>
+<h3>4.5 Socket connection in React (client/src/socket.js)</h3>
+<pre>import { io } from 'socket.io-client';
+
+// One shared Socket.IO client. autoConnect:false -> we connect/disconnect from a React effect.
+export const SOCKET_URL = 'http://localhost:5001';
+export const socket = io(SOCKET_URL, { autoConnect: false });</pre>
+<h3>4.6 Listening for notifications and storing them in React state (client/src/context/NotificationContext.jsx)</h3>
+<p>useEffect connects once, registers listeners, stores each notification in state (newest first), shows a toast, and bumps menuVersion so the menu page re-fetches. The cleanup function calls socket.off() and socket.disconnect().</p>
+<pre>import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { socket } from '../socket';
+
+const NotificationContext = createContext(null);
+
+export function NotificationProvider({ children }) {
+  const [notifications, setNotifications] = useState([]); // newest first
+  const [toasts, setToasts] = useState([]);
+  const [connected, setConnected] = useState(false);
+  const [menuVersion, setMenuVersion] = useState(0); // bumps on every menu change -> pages refetch
+
+  useEffect(() => {
+    const onConnect = () => setConnected(true);
+    const onDisconnect = () => setConnected(false);
+    const onNotification = (n) => {
+      setNotifications((prev) => [{ ...n, read: false }, ...prev].slice(0, 30)); // store in state
+      setToasts((prev) => [...prev, n]);
+      setMenuVersion((v) => v + 1);
+      setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== n.id)), 6000);
+    };
+
+    socket.on('connect', onConnect);
+    socket.on('disconnect', onDisconnect);
+    socket.on('notification', onNotification);
+    socket.connect();
+
+    // cleanup: remove listeners and close the connection when the provider unmounts
+    return () => {
+      socket.off('connect', onConnect);
+      socket.off('disconnect', onDisconnect);
+      socket.off('notification', onNotification);
+      socket.disconnect();
+    };
+  }, []);
+
+  const unreadCount = notifications.filter((n) => !n.read).length;
+  const markAllRead = useCallback(() => setNotifications((p) => p.map((n) => ({ ...n, read: true }))), []);
+  const clearAll = useCallback(() => setNotifications([]), []);
+
+  return (
+    &lt;NotificationContext.Provider value={{ notifications, toasts, unreadCount, connected, menuVersion, markAllRead, clearAll }}>
+      {children}
+    &lt;/NotificationContext.Provider>
+  );
+}
+
+export const useNotifications = () => useContext(NotificationContext);</pre>
+<h3>4.7 NotificationBell component (client/src/components/NotificationBell.jsx)</h3>
+<p>Shows the unread count badge, a connection indicator dot and a dropdown list. ToastStack (same file) shows the pop-up for a few seconds.</p>
+<pre>import React, { useState } from 'react';
+import { useNotifications } from '../context/NotificationContext';
+
+const STYLE = {
+  created: { icon: '🆕', color: 'text-emerald-700', bg: 'bg-emerald-50', label: 'New' },
+  updated: { icon: '✏️', color: 'text-blue-700', bg: 'bg-blue-50', label: 'Updated' },
+  deleted: { icon: '🗑️', color: 'text-red-700', bg: 'bg-red-50', label: 'Removed' },
+};
+
+const timeAgo = (iso) => {
+  const s = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
+  if (s &lt; 5) return 'just now';
+  if (s &lt; 60) return `${s}s ago`;
+  return `${Math.round(s / 60)} min ago`;
+};
+
+// Bell icon with unread badge + dropdown list of received notifications
+export default function NotificationBell() {
+  const { notifications, unreadCount, connected, markAllRead, clearAll } = useNotifications();
+  const [open, setOpen] = useState(false);
+
+  const toggle = () => {
+    if (!open) markAllRead(); // opening the list marks everything as read (badge clears on next render)
+    setOpen(!open);
+  };
+
+  return (
+    &lt;div className="relative">
+      &lt;button
+        onClick={toggle}
+        aria-label="Notifications"
+        className="relative w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-300 flex items-center justify-center cursor-pointer"
+      >
+        &lt;span className="text-lg">🔔&lt;/span>
+        {unreadCount > 0 &amp;&amp; (
+          &lt;span id="bell-count" className="absolute -top-1.5 -right-1.5 min-w-5 h-5 px-1 rounded-full bg-red-600 text-white text-[11px] font-black flex items-center justify-center border-2 border-white">
+            {unreadCount}
+          &lt;/span>
+        )}
+        &lt;span className={`absolute bottom-0.5 right-0.5 w-2 h-2 rounded-full ${connected ? 'bg-emerald-500' : 'bg-slate-400'}`} title={connected ? 'Live' : 'Offline'} />
+      &lt;/button>
+
+      {open &amp;&amp; (
+        &lt;div id="bell-dropdown" className="absolute right-0 mt-2 w-80 max-w-[90vw] bg-white border border-slate-200 rounded-2xl shadow-xl z-50 overflow-hidden">
+          &lt;div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+            &lt;span className="font-bold text-slate-900 text-sm">Notifications&lt;/span>
+            &lt;button onClick={clearAll} className="text-xs font-semibold text-slate-500 hover:text-red-600 cursor-pointer">Clear all&lt;/button>
+          &lt;/div>
+          &lt;ul className="max-h-80 overflow-y-auto">
+            {notifications.length === 0 &amp;&amp; &lt;li className="px-4 py-8 text-center text-sm text-slate-500">No notifications yet&lt;/li>}
+            {notifications.map((n) => {
+              const s = STYLE[n.type] || STYLE.updated;
+              return (
+                &lt;li key={n.id} className="px-4 py-3 border-b border-slate-100 last:border-0 flex gap-3">
+                  &lt;span className={`w-9 h-9 shrink-0 rounded-lg ${s.bg} flex items-center justify-center`}>{s.icon}&lt;/span>
+                  &lt;div className="min-w-0">
+                    &lt;p className="text-sm text-slate-800 leading-snug">{n.message}&lt;/p>
+                    &lt;p className="text-[11px] text-slate-500 mt-0.5">&lt;span className={`font-bold ${s.color}`}>{s.label}&lt;/span> · by {n.by} · {timeAgo(n.timestamp)}&lt;/p>
+                  &lt;/div>
+                &lt;/li>
+              );
+            })}
+          &lt;/ul>
+        &lt;/div>
+      )}
+    &lt;/div>
+  );
+}</pre>
+<h3>4.8 Integrating the bell into the Navbar and the live menu refresh</h3>
+<pre>// client/src/components/Navbar.jsx
+import NotificationBell from './NotificationBell';
+...
+&lt;NotificationBell />
+&lt;AuthNav />
+
+// client/src/App.jsx  – provider wraps the app, toasts are rendered once
+&lt;NotificationProvider>
+  &lt;CartProvider>
+    &lt;ToastStack />
+    &lt;Routes> ... &lt;/Routes>
+  &lt;/CartProvider>
+&lt;/NotificationProvider>
+
+// client/src/pages/MenuPage.jsx  – menu reloads on every notification
+const { menuVersion } = useNotifications();
+useEffect(() => { fetchMenuFromApi(); }, [menuVersion]);</pre>
+<p>The Admin Dashboard (client/src/pages/AdminDashboard.jsx) has a "Manage menu" panel with Add dish, Edit price and Delete buttons that call the admin-only REST endpoints; each action triggers the notification.</p>
+<div class="pb"></div>
+<h2>5. Screenshots</h2>
+<p>Note: screenshots were captured from a local run (React app, Express/Socket.IO server and a local MongoDB). Two separate browsers were connected at the same time: an administrator on the Admin Dashboard and a customer (user) on the menu page. Each "user" screenshot shows the customer's browser receiving the notification without any refresh.</p>
+<h3>A. Create, update and delete notifications</h3>
+<p class="lab">1a. Administrator creating an event (adding a new dish)</p>
+<div class="shot"><img src="file:///Users/ronitahuja/Desktop/FSD/Restaurant ordering system/screenshots/exp-7/e1_create_admin.png" style="width:600px"></div>
+<p class="lab">1b. User receiving the "created" notification (toast and bell badge)</p>
+<div class="shot"><img src="file:///Users/ronitahuja/Desktop/FSD/Restaurant ordering system/screenshots/exp-7/e1_create_user.png" style="width:600px"></div>
+<p class="lab">2a. Administrator updating an event (changing the price)</p>
+<div class="shot"><img src="file:///Users/ronitahuja/Desktop/FSD/Restaurant ordering system/screenshots/exp-7/e2_update_admin.png" style="width:600px"></div>
+<p class="lab">2b. User receiving the "updated" notification</p>
+<div class="shot"><img src="file:///Users/ronitahuja/Desktop/FSD/Restaurant ordering system/screenshots/exp-7/e2_update_user.png" style="width:600px"></div>
+<p class="lab">3a. Administrator deleting an event (removing the dish)</p>
+<div class="shot"><img src="file:///Users/ronitahuja/Desktop/FSD/Restaurant ordering system/screenshots/exp-7/e3_delete_admin.png" style="width:600px"></div>
+<p class="lab">3b. User receiving the "deleted" notification</p>
+<div class="shot"><img src="file:///Users/ronitahuja/Desktop/FSD/Restaurant ordering system/screenshots/exp-7/e3_delete_user.png" style="width:600px"></div>
+<h3>B. Connection and disconnection logs</h3>
+<p class="lab">4. Server terminal: client connection and disconnection logs</p>
+<div class="shot"><img src="file:///Users/ronitahuja/Desktop/FSD/Restaurant ordering system/screenshots/exp-7/e6_logs.png" style="width:640px"></div>
+<h3>C. Notification bell</h3>
+<p class="lab">5. Notification bell displaying the notification count</p>
+<div class="shot"><img src="file:///Users/ronitahuja/Desktop/FSD/Restaurant ordering system/screenshots/exp-7/e4_bell_count.png" style="width:600px"></div>
+<p class="lab">6. Notification dropdown displaying the received notifications</p>
+<div class="shot"><img src="file:///Users/ronitahuja/Desktop/FSD/Restaurant ordering system/screenshots/exp-7/e5_dropdown.png" style="width:600px"></div>
+<h2>6. Conclusion</h2>
+<p>Real-time notifications were added to BiteOrder using Socket.IO. The Express server is wrapped in an HTTP server with Socket.IO attached; client connections and disconnections are handled and logged; controllers broadcast a notification with io.emit() whenever an administrator creates, updates or deletes a menu item; and the React app connects with socket.io-client inside useEffect, stores notifications in state, and shows them as a toast, a notification bell with unread count and a dropdown list while the menu refreshes automatically – all without a page refresh.</p></body></html>

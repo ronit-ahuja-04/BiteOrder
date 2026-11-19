@@ -1,0 +1,234 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>IDOR Assessment</title><style>@page{size:A4;margin:20mm 18mm 18mm 18mm;@top-center{content:"FULL STACK DEVELOPMENT ASSIGNMENT";font:bold 9pt "Times New Roman",serif}@bottom-center{content:"BiteOrder | IDOR Vulnerability Assessment    " counter(page);font:9pt "Times New Roman",serif}}
+body{font:11pt/1.4 "Times New Roman",Times,serif;color:#000;margin:0}h2{font-size:15pt;margin:16px 0 6px;break-after:avoid}h3{font-size:12pt;margin:10px 0 3px;break-after:avoid}p{margin:0 0 6px}
+.center{text-align:center;margin:0 0 14px}.li{margin:0 0 3px 22px}code{font-family:"Courier New",monospace;font-size:10pt}
+pre{font:8.5pt/1.25 "Courier New",monospace;background:#f2f2f2;padding:6px 8px;margin:4px 0 8px;white-space:pre-wrap;word-break:break-word;break-inside:avoid}
+table{border-collapse:collapse;margin:4px 0 8px;break-inside:avoid}th,td{border:1px solid #000;padding:3px 7px;text-align:left;vertical-align:top;font-size:10.5pt}
+.pb{break-after:page}.gap{height:10px}.fig{break-inside:avoid;text-align:center;margin:8px 0}.fig img{max-width:100%;border:1px solid #ccc}.cap{font-style:italic;font-size:10pt;margin:3px 0 0}</style></head><body><p class="center" style="font-size:11pt;font-weight:700">FULL STACK DEVELOPMENT ASSIGNMENT</p>
+<p class="center" style="font-size:22pt;font-weight:700">ASSIGNMENT</p>
+<p class="center" style="font-size:16pt;font-weight:700">Identification and Prevention of IDOR Vulnerability in a Web Application</p>
+<p class="center" style="font-size:12pt;font-weight:700">PROJECT: RESTAURANT ORDERING SYSTEM (BITEORDER)</p>
+<table><tr><th><b>Name</b></th><th>Ronit Ahuja</th></tr><tr><td><b>Class</b></td><td>D15A</td></tr><tr><td><b>Roll No.</b></td><td>63</td></tr></table>
+<div class="pb"></div>
+<h2>Project Information</h2>
+<p><b>Project Name:</b> Restaurant Ordering System (BiteOrder)</p>
+<p><b>Frontend:</b> React.js</p>
+<p><b>Backend:</b> Node.js and Express.js</p>
+<p><b>Database:</b> MongoDB with Mongoose</p>
+<p><b>Authentication:</b> JWT Authentication</p>
+<p><b>Testing Tool:</b> API client (Postman-style HTTP requests)</p>
+<h2>1. Introduction</h2>
+<p>IDOR (Insecure Direct Object Reference) is a type of Broken Access Control vulnerability. It occurs when an application uses an identifier supplied by a user, such as a profile ID, to access a database record but does not verify whether the logged-in user is allowed to access that record. An attacker may change the identifier in a URL or API request and view or modify another user's private information.</p>
+<p>IDOR is important because authentication alone does not guarantee that a user is authorized to access every resource. In BiteOrder, the Profile API uses a MongoDB user ID in the route <code>GET /api/profiles/:id</code>. The test demonstrated that Asha could initially retrieve Bala's profile while using Asha's own JWT. The issue was then prevented by checking resource ownership on the backend before returning profile data. The same test also found, and fixed, an IDOR in the order-details API (section 8.1).</p>
+<h2>2. Objectives</h2>
+<div class="li">&bull; To understand IDOR and Broken Access Control in web applications.</div>
+<div class="li">&bull; To create two test accounts and identify their profile resource IDs.</div>
+<div class="li">&bull; To test the Profile API using JWT authentication and an API client.</div>
+<div class="li">&bull; To demonstrate unauthorized cross-user profile access before applying a fix.</div>
+<div class="li">&bull; To implement ownership verification using the authenticated user's ID.</div>
+<div class="li">&bull; To verify that an authorized request succeeds and an unauthorized request is rejected.</div>
+<h2>3. Problem Statement</h2>
+<p>A web application may expose an API endpoint that accepts a resource identifier in its URL. If the backend checks only whether a request contains a valid JWT but does not check whether the authenticated user owns the requested resource, a user can replace the ID in the request with another user's ID. This can expose private profile information.</p>
+<p>In the BiteOrder project, the endpoint <code>GET /api/profiles/:id</code> was tested with two accounts: Asha Test and Bala Test. Asha's JWT was kept unchanged while the profile ID in the request was replaced with Bala's MongoDB user ID. The vulnerable API returned Bala's profile with HTTP 200 OK. The API was then secured by comparing <code>req.user.id</code> with <code>req.params.id</code> and returning HTTP 403 Forbidden when the IDs did not match.</p>
+<h2>4. Theory</h2>
+<h3>1. What is IDOR?</h3>
+<p>IDOR stands for Insecure Direct Object Reference. It happens when an application exposes a direct reference to an object, such as a user ID, and fails to check whether the requester is allowed to access that object.</p>
+<h3>2. What is Broken Access Control?</h3>
+<p>Broken Access Control is a security weakness in which users can perform actions or access data beyond their permissions. IDOR is one example of this weakness. It is ranked number one in the OWASP Top 10.</p>
+<h3>3. How does IDOR occur?</h3>
+<p>IDOR can occur when a backend trusts an ID received from a URL, form, or request body without checking ownership or permission. An attacker changes the ID to refer to another user's record.</p>
+<h3>4. Authentication vs Authorization</h3>
+<p>Authentication verifies who the user is, commonly through login credentials or a token. Authorization decides what that authenticated user is allowed to access or do.</p>
+<h3>5. JWT authentication</h3>
+<p>JSON Web Token (JWT) is a compact token commonly issued after successful login. The client sends the token with later requests, usually in the Authorization header. The backend verifies the token and identifies the user. A valid JWT does not automatically grant access to every user's resources.</p>
+<h3>6. Express middleware</h3>
+<p>Express middleware is a function that runs during the request-response process. Authentication middleware can read and verify a JWT, identify the logged-in user, and attach that user's information to the request object.</p>
+<h3>7. Purpose of req.user.id</h3>
+<p>req.user.id represents the ID of the authenticated user set by the authentication middleware. It is trusted server-side identity information and can be compared with the requested resource ID to check ownership.</p>
+<h3>8. MongoDB Mongoose findById()</h3>
+<p>Mongoose findById(id) searches a MongoDB collection for a document whose _id matches the supplied ID. In this assignment, it is used to retrieve a user's profile. The result should be returned only after authorization checks.</p>
+<h3>9. Importance of ownership verification</h3>
+<p>Ownership verification ensures that a user can access only the records they are permitted to access. It prevents users from changing an ID to view another person's private data.</p>
+<h3>10. HTTP 403 Forbidden</h3>
+<p>HTTP 403 Forbidden means the server understood the request but refuses to authorize it. In this assignment, the server returns 403 when Asha tries to access Bala's profile. (401 Unauthorized, in contrast, means the request has no valid authentication.)</p>
+<h2>5. Implementation</h2>
+<h3>5.1 Creating two test accounts</h3>
+<p>Two dummy accounts, Asha Test and Bala Test, were registered in the BiteOrder application through its Register page. Figures 1 and 2 show the account creation forms, and Figures 3 and 6 show the corresponding logged-in profile pages.</p>
+<h3>5.2 Identifying user IDs</h3>
+<p>The user IDs were obtained from the profile request and response in the browser Network tab and used as resource identifiers for the API test. Passwords and full JWT values are intentionally not reproduced.</p>
+<h3>5.3 Implementing the Profile API</h3>
+<p>The backend exposes <code>GET /api/profiles/:id</code>. The route receives the requested MongoDB user ID as the id route parameter. It retrieves the corresponding user document and returns profile fields while excluding the password field.</p>
+<h3>5.4 JWT authentication</h3>
+<p>The Profile API is protected by JWT authentication middleware (<code>protect</code>). The client sends the bearer token in the Authorization header. The middleware verifies the token and attaches the authenticated user's identity to <code>req.user</code>.</p>
+<h3>5.5 Testing with the API client</h3>
+<p>GET requests were sent to the local backend endpoint. The Authorization header contained Asha's bearer token. The token was kept the same while the profile ID in the URL was changed for the cross-user access test.</p>
+<h3>5.6 Demonstrating IDOR before fixing</h3>
+<p>Asha first requested her own profile and received HTTP 200 OK. Then the URL was changed to Bala's profile ID while Asha's JWT remained in use. The vulnerable API returned Bala's profile with HTTP 200 OK, demonstrating unauthorized access.</p>
+<h3>5.7 Inspecting vulnerable backend code</h3>
+<p>The vulnerable route checked authentication but did not compare the authenticated user's ID with the requested profile ID. Therefore, any authenticated user could request another user's profile by changing the ID.</p>
+<h3>5.8 Implementing ownership verification</h3>
+<p>The route was updated to compare <code>req.user.id</code> with <code>req.params.id</code>. If the values do not match, the server immediately returns HTTP 403 Forbidden with an access-denied message. The database lookup and profile response are performed only for an owner-authorized request. (Administrators are the only exception, by design.)</p>
+<h3>5.9 Testing authorized access after fixing</h3>
+<p>Asha requested her own profile using Asha's JWT and Asha's profile ID. The secure API returned HTTP 200 OK, confirming that legitimate profile access continued to work.</p>
+<h3>5.10 Testing unauthorized access after fixing</h3>
+<p>Asha then requested Bala's profile using the same Asha JWT and Bala's profile ID. The secure API returned HTTP 403 Forbidden with the message that the user can access only their own profile.</p>
+<div class="pb"></div>
+<h2>6. Important Code</h2>
+<p>The following code is the BiteOrder Profile API and the ownership check demonstrated in the screenshots. The files shown are taken from the project source.</p>
+<h3>6.1 User.js – Mongoose User Schema</h3>
+<pre>const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
+
+const userSchema = new mongoose.Schema(
+  {
+    name: { type: String, required: [true, '"name" is a required field.'], trim: true, minlength: [2, '"name" must be at least 2 characters.'] },
+    email: {
+      type: String,
+      required: [true, '"email" is a required field.'],
+      unique: true,
+      lowercase: true,
+      trim: true,
+      match: [/^\S+@\S+\.\S+$/, '"email" must be a valid email address.'],
+    },
+    password: {
+      type: String,
+      required: [true, '"password" is a required field.'],
+      minlength: [6, '"password" must be at least 6 characters.'],
+      select: false, // never returned by queries unless explicitly requested
+    },
+    role: { type: String, enum: ['customer', 'admin'], default: 'customer' },
+  },
+  {
+    timestamps: true,
+    toJSON: { versionKey: false, transform: (_doc, ret) => { delete ret.password; return ret; } },
+  }
+);
+
+// Hash the password with bcrypt (10 salt rounds) before saving
+userSchema.pre('save', async function () {
+  if (!this.isModified('password')) return;
+  this.password = await bcrypt.hash(this.password, 10);
+});
+
+userSchema.methods.matchPassword = function (plain) {
+  return bcrypt.compare(plain, this.password);
+};
+
+module.exports = mongoose.model('User', userSchema);</pre>
+<h3>6.2 Authentication Middleware (JWT)</h3>
+<pre>const jwt = require('jsonwebtoken');
+const User = require('../models/User');
+
+// protect: verifies the Bearer token and attaches the user to req.user
+const protect = async (req, res, next) => {
+  const header = req.headers.authorization || '';
+  if (!header.startsWith('Bearer ')) {
+    return res.status(401).json({ success: false, message: 'Not authorized: no token provided.' });
+  }
+  try {
+    const token = header.split(' ')[1];
+    const decoded = jwt.verify(token, process.env.JWT_SECRET); // throws if tampered or expired
+    const user = await User.findById(decoded.id);
+    if (!user) {
+      return res.status(401).json({ success: false, message: 'Not authorized: user no longer exists.' });
+    }
+    req.user = user;
+    next();
+  } catch (err) {
+    const message = err.name === 'TokenExpiredError' ? 'Not authorized: token expired.' : 'Not authorized: invalid token.';
+    res.status(401).json({ success: false, message });
+  }
+};</pre>
+<h3>6.3 Vulnerable Profile API – Before Fix</h3>
+<pre>// Vulnerable example: authentication is checked, ownership is not.
+router.get('/:id', protect, async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id).select('-password');
+
+    if (!user) {
+      return res.status(404).json({ message: 'Profile not found' });
+    }
+
+    // IDOR: the requested ID is not checked against req.user.id.
+    return res.status(200).json({ profile: user });
+  } catch (error) {
+    return res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});</pre>
+<h3>6.4 Secure Profile API – After Fix</h3>
+<pre>const express = require('express');
+const router = express.Router();
+
+const User = require('../models/User');
+const { protect } = require('../middleware/auth');
+
+// Secure Profile API - IDOR protection
+router.get('/:id', protect, async (req, res) => {
+  try {
+    // Ownership verification: req.user comes from the verified JWT (trusted),
+    // req.params.id comes from the URL (untrusted). Admins may view any profile.
+    if (req.user.id !== req.params.id &amp;&amp; req.user.role !== 'admin') {
+      return res.status(403).json({
+        message: 'Access denied. You can only access your own profile.',
+      });
+    }
+
+    // Fetch the profile only after the ownership check passed
+    const user = await User.findById(req.params.id).select('-password');
+
+    if (!user) {
+      return res.status(404).json({ message: 'Profile not found' });
+    }
+
+    return res.status(200).json({ profile: user });
+  } catch (error) {
+    return res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+module.exports = router;</pre>
+<h3>6.5 Route Registration</h3>
+<pre>const profileRoutes = require('./routes/profileRoutes');
+
+// Register in the Express application (server/app.js):
+app.use('/api/profiles', profileRoutes);</pre>
+<h3>6.6 API Request Examples</h3>
+<p>Request method: GET   |   Endpoint pattern: <code>http://localhost:5001/api/profiles/:id</code>   |   Authorization: Bearer &lt;Asha's JWT> (the token is used in the client; it is not pasted into this report).</p>
+<pre># Authorized request: Asha's token + Asha's profile ID
+GET http://localhost:5001/api/profiles/&lt;ASHA_USER_ID>
+Authorization: Bearer &lt;ASHA_JWT>
+
+# IDOR test before fix: same Asha token + Bala's profile ID
+GET http://localhost:5001/api/profiles/&lt;BALA_USER_ID>
+Authorization: Bearer &lt;ASHA_JWT>
+
+# Unauthorized request after fix: same Asha token + Bala's profile ID
+GET http://localhost:5001/api/profiles/&lt;BALA_USER_ID>
+Authorization: Bearer &lt;ASHA_JWT></pre>
+<p>Expected secure behaviour: the first request returns 200 OK. The third request returns 403 Forbidden. The second request returned 200 OK in the vulnerable version, which was the demonstrated IDOR issue.</p>
+<div class="pb"></div>
+<h2>7. Screenshots</h2>
+<p>The screenshots below are actual captures from the running BiteOrder application and its API (test instance on port 5002, separate from the main server on 5001). They are evidence of the account setup, API testing, vulnerable response, code change and final authorization result. Passwords and JWT token values are not shown: the Authorization header is replaced with "hidden". The browser-request figures show the request data recorded from the running React app, and the API figures show the real server responses.</p>
+<div class="fig"><img src="file:///Users/ronitahuja/Desktop/FSD/Restaurant ordering system/screenshots/idor-profile/reg_A.png" style="width:560px"><p class="cap">Figure 1: Registration of the Asha Test account in the BiteOrder application.</p></div>
+<div class="fig"><img src="file:///Users/ronitahuja/Desktop/FSD/Restaurant ordering system/screenshots/idor-profile/reg_B.png" style="width:560px"><p class="cap">Figure 2: Registration of the Bala Test account in the BiteOrder application.</p></div>
+<div class="fig"><img src="file:///Users/ronitahuja/Desktop/FSD/Restaurant ordering system/screenshots/idor-profile/profile_ui_A.png" style="width:560px"><p class="cap">Figure 3: Asha Test logged in and viewing My Profile (the page calls GET /api/profiles/:id).</p></div>
+<div class="fig"><img src="file:///Users/ronitahuja/Desktop/FSD/Restaurant ordering system/screenshots/idor-profile/before_net_A.png" style="width:520px"><p class="cap">Figure 4: Profile request and response for the signed-in test user (Asha Test) in the browser Network (Fetch/XHR) view.</p></div>
+<div class="fig"><img src="file:///Users/ronitahuja/Desktop/FSD/Restaurant ordering system/screenshots/idor-profile/before_api_own.png" style="width:520px"><p class="cap">Figure 5: API request for Asha's own profile; the API returns HTTP 200 OK.</p></div>
+<div class="fig"><img src="file:///Users/ronitahuja/Desktop/FSD/Restaurant ordering system/screenshots/idor-profile/before_net_B.png" style="width:520px"><p class="cap">Figure 6: Bala Test's profile request in the browser, used to identify the second test account's ID.</p></div>
+<div class="fig"><img src="file:///Users/ronitahuja/Desktop/FSD/Restaurant ordering system/screenshots/idor-profile/before_api_idor.png" style="width:520px"><p class="cap">Figure 7: Response showing Bala Test's profile returned to Asha's token with HTTP 200 OK during the IDOR test (before the fix).</p></div>
+<div class="fig"><img src="file:///Users/ronitahuja/Desktop/FSD/Restaurant ordering system/screenshots/idor-profile/code_vulnerable.png" style="width:520px"><p class="cap">Figure 8: Vulnerable profile route (before the fix): no ownership check.</p></div>
+<div class="fig"><img src="file:///Users/ronitahuja/Desktop/FSD/Restaurant ordering system/screenshots/idor-profile/code_secure.png" style="width:520px"><p class="cap">Figure 9: Secure profile route with ownership verification comparing the authenticated ID and the requested ID.</p></div>
+<div class="fig"><img src="file:///Users/ronitahuja/Desktop/FSD/Restaurant ordering system/screenshots/idor-profile/after_api_idor.png" style="width:520px"><p class="cap">Figure 10: API response after the fix; cross-user access is rejected with HTTP 403 Forbidden.</p></div>
+<div class="fig"><img src="file:///Users/ronitahuja/Desktop/FSD/Restaurant ordering system/screenshots/idor-profile/after_api_own.png" style="width:520px"><p class="cap">Figure 11: After the fix, Asha can still access her own profile (HTTP 200 OK).</p></div>
+<div class="fig"><img src="file:///Users/ronitahuja/Desktop/FSD/Restaurant ordering system/screenshots/idor-profile/after_api_b_own.png" style="width:520px"><p class="cap">Figure 12: After the fix, Bala can access Bala's own profile (HTTP 200 OK).</p></div>
+<div class="fig"><img src="file:///Users/ronitahuja/Desktop/FSD/Restaurant ordering system/screenshots/idor-profile/after_api_notoken.png" style="width:520px"><p class="cap">Figure 13: After the fix, a request with no token is rejected (HTTP 401 Unauthorized).</p></div>
+<h2>8. Testing and Observation</h2>
+<table><tr><th>Test Case</th><th>Expected Result</th><th>Actual Result</th></tr><tr><td>Asha accesses Asha's profile</td><td>200 OK</td><td>200 OK</td></tr><tr><td>Asha accesses Bala's profile before fix</td><td>Access denied</td><td>200 OK – Vulnerable</td></tr><tr><td>Asha accesses Bala's profile after fix</td><td>403 Forbidden</td><td>403 Forbidden</td></tr><tr><td>Bala accesses Bala's profile after fix</td><td>200 OK</td><td>200 OK</td></tr><tr><td>Request with no token after fix</td><td>401 Unauthorized</td><td>401 Unauthorized</td></tr></table>
+<p>Observation: Before the fix, the backend authenticated Asha but did not verify ownership of the requested profile. Changing the profile ID therefore exposed Bala's profile. After adding the ownership check, Asha could still access her own profile, but the server rejected her request for Bala's profile with HTTP 403 Forbidden. This confirms that the fix blocked the tested cross-user access while preserving legitimate access. The scenarios are also covered by automated tests (<code>npm test</code> in the server folder).</p>
+<h3>8.1 Additional finding: order-details API (IDOR) – fixed</h3>
+<p>While testing, the same flaw was found in <code>GET /api/orders/:orderId</code>, which returned any customer's order (name, mobile number, items) to any caller, even without a token. It was fixed by requiring login and querying by both the order ID and the owner (<code>{ orderId, user: req.user._id }</code>), so another user's order now returns 404 Not Found and nothing is disclosed.</p>
+<div class="fig"><img src="file:///Users/ronitahuja/Desktop/FSD/Restaurant ordering system/screenshots/idor/before_api_idor.png" style="width:500px"><p class="cap">Figure 14: Orders API before the fix: Asha's token returned Bala's order with HTTP 200 OK.</p></div>
+<div class="fig"><img src="file:///Users/ronitahuja/Desktop/FSD/Restaurant ordering system/screenshots/idor/after_api_idor.png" style="width:500px"><p class="cap">Figure 15: Orders API after the fix: the same request now returns HTTP 404 Not Found.</p></div>
+<h2>9. Result</h2>
+<p>The IDOR vulnerability in the BiteOrder Profile API was successfully identified and demonstrated. <b>Result: VULNERABLE before the fix.</b> Before the fix, Asha could access Bala's profile using her own JWT by changing the profile ID. Ownership verification using <code>req.user.id</code> was implemented, after which the API returned 200 OK for Asha's own profile and 403 Forbidden for Bala's profile (<b>NOT VULNERABLE after the fix</b>).</p>
+<h2>10. Conclusion</h2>
+<p>This assignment demonstrates that authentication and authorization are both necessary for web application security. A valid JWT confirms the identity of a user, but the backend must also verify whether that user is allowed to access the requested resource. By comparing the authenticated user's ID with the requested profile ID before returning data, the BiteOrder application prevents the tested IDOR vulnerability. Two security measures prevent IDOR: (1) enforce server-side ownership/object-level authorization using the identity from the verified JWT, never an ID supplied by the client, and (2) require authentication on every private route and use unpredictable identifiers instead of sequential ones. Ownership checks should be applied consistently to every private resource and to operations that read, update, or delete user-owned data.</p></body></html>

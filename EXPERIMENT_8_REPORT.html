@@ -1,0 +1,281 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>Experiment 8</title><style>@page{size:A4;margin:18mm}body{font:11pt/1.4 Arial,Helvetica,sans-serif;color:#000;margin:0}h1{font-size:18pt;margin:0 0 8px}h2{font-size:14pt;margin:18px 0 6px;break-after:avoid}h3{font-size:12pt;margin:14px 0 6px;break-after:avoid}p{margin:0 0 6px}p.q{font-weight:bold;margin:10px 0 3px;break-after:avoid}p.lab{font-weight:bold;margin:12px 0 4px;break-after:avoid}.li{margin:0 0 3px 22px}code{font-family:Courier New,monospace;font-size:10pt}pre{font:8.3pt/1.25 Courier New,monospace;background:#f3f3f3;padding:6px 8px;margin:4px 0;white-space:pre-wrap;word-break:break-word}table{border-collapse:collapse;width:100%;margin:4px 0;break-inside:avoid}th,td{border:1px solid #000;padding:3px 6px;text-align:left;vertical-align:top;font-size:10.5pt}.shot{break-inside:avoid;margin:2px 0 10px}.shot img{max-width:100%;border:1px solid #bbb}.cap{font-size:9.5pt;font-style:italic;margin:2px 0}.ph{border:2px dashed #c00;color:#c00;font-weight:bold;padding:16px 10px;margin:6px 0 10px;text-align:center;break-inside:avoid}.pb{break-after:page}</style></head><body>
+<h1>Experiment – 8</h1>
+<p><b>Containerization, CI/CD Pipeline and Deployment</b></p>
+<table><tr><th>Field</th><th>Details</th></tr><tr><td>Student Name</td><td>Ronit Ahuja</td></tr><tr><td>Class &amp; Division</td><td>D15A</td></tr><tr><td>Roll Number</td><td>63</td></tr><tr><td>Date</td><td>15/11/2026</td></tr><tr><td>Project</td><td>BiteOrder – Online Restaurant Ordering &amp; Management System (Mini Project)</td></tr><tr><td>Technology Stack</td><td>React 19 + Vite, Node.js 20 + Express, MongoDB 7, Docker, Docker Compose, GitHub Actions, Render, Vercel</td></tr></table>
+<h2>1. Aim</h2>
+<p>To containerize the web application using Docker and implement CI/CD using GitHub Actions and cloud deployment platforms.</p>
+<h2>2. Problem Statement</h2>
+<p>Deploy the BiteOrder mini project (React frontend and Node.js backend with MongoDB) using Docker. Configure Docker Compose to run the whole stack, automate code validation with GitHub Actions, and deploy the frontend on Vercel and the backend on Render.</p>
+<h2>3. Theory Questions</h2>
+<p class="q">1. What is Docker and containerization?</p>
+<p>Docker is an open platform for building, shipping and running applications in containers. Containerization packages an application together with its runtime, libraries and configuration into one standard unit (a container) that runs the same way on any machine that has a container engine. Containers are isolated processes that share the host operating-system kernel, so they start in seconds and are much smaller than virtual machines, which each carry a full guest operating system.</p>
+<table><tr><th></th><th>Container</th><th>Virtual machine</th></tr><tr><td>Packages</td><td>App + dependencies (no guest OS)</td><td>Full guest OS + app</td></tr><tr><td>Size / start-up</td><td>Megabytes / seconds</td><td>Gigabytes / minutes</td></tr><tr><td>Isolation</td><td>Process-level (shared kernel)</td><td>Hardware-level (own kernel)</td></tr><tr><td>Portability</td><td>Runs the same everywhere ("works on my machine" solved)</td><td>Heavier to move</td></tr></table>
+<p>In this experiment BiteOrder runs as three containers: MongoDB, the API (247 MB image on disk) and the frontend served by nginx (77 MB).</p>
+<p class="q">2. What is Docker Compose?</p>
+<p>Docker Compose is a tool for defining and running multi-container applications from one YAML file (<code>docker-compose.yml</code>). The file lists the services (containers), the images or build contexts, environment variables, ports, volumes, health checks and start-up order (<code>depends_on</code>). One command, <code>docker compose up --build</code>, builds the images and starts the entire stack on a shared network where the services reach each other by service name (for example the API connects to <code>mongodb://mongo:27017</code>).</p>
+<p class="q">3. What is a Dockerfile?</p>
+<p>A Dockerfile is a text file with the instructions that Docker follows to build an image: <code>FROM</code> (base image), <code>WORKDIR</code>, <code>COPY</code>, <code>RUN</code> (execute a command while building), <code>ENV</code>/<code>ARG</code> (variables), <code>EXPOSE</code> (port), <code>USER</code>, <code>HEALTHCHECK</code> and <code>CMD</code> (command that starts the container). Each instruction creates a cached layer, so copying <code>package.json</code> and installing dependencies before copying the code makes rebuilds fast. A multi-stage Dockerfile builds in one stage and copies only the result into a small final image; the BiteOrder frontend uses this: Node builds the React bundle, and nginx serves the static files.</p>
+<p class="q">4. What is GitHub Actions?</p>
+<p>GitHub Actions is the CI/CD service built into GitHub. A workflow is a YAML file in <code>.github/workflows/</code> that runs on events such as a push or a pull request. It contains jobs that run on GitHub-hosted runners, and each job is a list of steps (shell commands or reusable actions such as <code>actions/checkout</code>). Jobs can have service containers (for example MongoDB) and can depend on each other with <code>needs</code>. The BiteOrder workflow tests the API, builds the frontend, builds both Docker images and then triggers the deployment, so broken code never reaches production.</p>
+<h2>4. Code</h2>
+<h3>4.1 Backend Dockerfile – <code>server/Dockerfile</code></h3><pre># ---- BiteOrder API (Node.js + Express + Socket.IO) ----
+FROM node:20-alpine
+
+ENV NODE_ENV=production
+WORKDIR /app
+
+# Install only production dependencies first (better layer caching)
+COPY package*.json ./
+RUN npm ci --omit=dev
+
+# Application code
+COPY . .
+
+# Run as the unprivileged &quot;node&quot; user
+USER node
+
+EXPOSE 5001
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD wget -qO- http://127.0.0.1:5001/health || exit 1
+
+CMD [&quot;node&quot;, &quot;server.js&quot;]</pre>
+<h3>4.2 Frontend Dockerfile (multi-stage) and nginx – <code>client/Dockerfile</code>, <code>client/nginx.conf</code></h3><pre># ---- BiteOrder frontend (React + Vite + Tailwind) : build, then serve with nginx ----
+FROM node:20-alpine AS build
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+# Public URL of the API, baked into the bundle at build time (Vite reads VITE_* variables)
+ARG VITE_API_BASE=http://localhost:5001
+ENV VITE_API_BASE=$VITE_API_BASE
+RUN npm run build
+
+FROM nginx:1.27-alpine
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/dist /usr/share/nginx/html
+EXPOSE 80
+HEALTHCHECK --interval=30s --timeout=5s CMD wget -qO- http://127.0.0.1/ &gt;/dev/null || exit 1</pre><pre>server {
+  listen 80;
+  root /usr/share/nginx/html;
+  index index.html;
+
+  # Single-page app: unknown paths (/login, /admin ...) are handled by React Router
+  location / {
+    try_files $uri /index.html;
+  }
+
+  # Cache hashed build assets for a year
+  location /assets/ {
+    expires 1y;
+    add_header Cache-Control &quot;public, immutable&quot;;
+  }
+}</pre>
+<h3>4.3 .dockerignore configuration</h3><p class="lab">server/.dockerignore</p><pre>node_modules
+npm-debug.log*
+.env
+.env.*
+!.env.example
+test
+Dockerfile
+.dockerignore
+.git
+.DS_Store</pre><p class="lab">client/.dockerignore</p><pre>node_modules
+dist
+.env
+.env.*
+Dockerfile
+.dockerignore
+.DS_Store</pre>
+<h3>4.4 Docker Compose – <code>docker-compose.yml</code> and <code>.env.docker.example</code></h3><pre># BiteOrder – whole stack in containers:  docker compose up --build
+# Needs a .env file next to this one (copy .env.docker.example -&gt; .env and set the secrets).
+# The frontend is served on http://localhost:8080 by default; set WEB_PORT in .env if that port is already in use.
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: [&quot;CMD&quot;, &quot;mongosh&quot;, &quot;--quiet&quot;, &quot;--eval&quot;, &quot;db.adminCommand(&#x27;ping&#x27;).ok&quot;]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: ./server
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 5001
+      MONGODB_URI: mongodb://mongo:27017/biteorder
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      JWT_EXPIRES_IN: 1d
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@biteorder.com}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in .env}
+      CLIENT_ORIGIN: http://localhost:${WEB_PORT:-8080}
+    ports:
+      - &quot;5001:5001&quot;
+
+  web:
+    build:
+      context: ./client
+      args:
+        VITE_API_BASE: http://localhost:5001
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - &quot;${WEB_PORT:-8080}:80&quot;
+
+volumes:
+  mongo-data:</pre><pre># Used by docker-compose.yml  (copy to &quot;.env&quot; in the project root - never commit the real file)
+JWT_SECRET=replace_with_a_long_random_string
+ADMIN_EMAIL=admin@biteorder.com
+ADMIN_PASSWORD=choose_a_strong_password
+# Optional: host port for the frontend (default 8080)
+# WEB_PORT=8080</pre>
+<h3>4.5 GitHub Actions workflow – <code>.github/workflows/ci.yml</code></h3><pre>name: CI / CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  server-tests:
+    name: API tests (Node + MongoDB)
+    runs-on: ubuntu-latest
+    services:
+      mongo:
+        image: mongo:7
+        ports: [&quot;27017:27017&quot;]
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci
+      - run: npm test
+        env:
+          TEST_MONGODB_URI: mongodb://localhost:27017/biteorder_test
+          JWT_SECRET: ci_only_secret
+
+  client-build:
+    name: Frontend production build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+      - run: npm ci
+      - run: npm run build
+        env:
+          VITE_API_BASE: https://example.invalid   # real value is set in Vercel
+      - uses: actions/upload-artifact@v4
+        with:
+          name: client-dist
+          path: client/dist
+
+  docker-build:
+    name: Docker images build
+    runs-on: ubuntu-latest
+    needs: [server-tests, client-build]
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t biteorder-api ./server
+      - run: docker build -t biteorder-web ./client
+
+  deploy:
+    name: Deploy (Render API + Vercel frontend)
+    runs-on: ubuntu-latest
+    needs: [docker-build]
+    if: github.event_name == &#x27;push&#x27; &amp;&amp; github.ref == &#x27;refs/heads/main&#x27;
+    steps:
+      # Backend: Render builds from the Dockerfile; a deploy hook triggers it right after the checks pass.
+      - name: Trigger Render deploy
+        env:
+          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        run: |
+          if [ -n &quot;$RENDER_DEPLOY_HOOK&quot; ]; then curl -fsS &quot;$RENDER_DEPLOY_HOOK&quot; &amp;&amp; echo &quot;Render deploy triggered&quot;; else echo &quot;RENDER_DEPLOY_HOOK not set - skipping&quot;; fi
+      # Frontend: Vercel&#x27;s GitHub integration deploys automatically on push to main.
+      # (Optional CLI deploy: set the VERCEL_TOKEN secret and uncomment the step below.)
+      # - run: npx vercel deploy --prod --token=${{ secrets.VERCEL_TOKEN }} --yes</pre>
+<h3>4.6 Docker build and run commands</h3><pre># build the two images
+docker build -t biteorder-api ./server
+docker build -t biteorder-web --build-arg VITE_API_BASE=http://localhost:5001 ./client
+
+# run the whole stack (MongoDB + API + frontend)
+cp .env.docker.example .env          # then set JWT_SECRET and ADMIN_PASSWORD
+docker compose up --build -d
+docker compose ps                    # status and health of the containers
+docker compose logs api              # API logs
+docker compose exec api node seed/seed.js   # load the 12 sample dishes
+docker compose down                  # stop and remove the containers</pre>
+<h3>4.7 Deployment configuration – Render (backend) and Vercel (frontend)</h3>
+<p class="lab">render.yaml (Render Blueprint)</p><pre># Render Blueprint – backend API (Docker). Create via: Render dashboard -&gt; New -&gt; Blueprint -&gt; select this repo.
+services:
+  - type: web
+    name: biteorder-api
+    runtime: docker
+    rootDir: server
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGODB_URI
+        sync: false            # paste your MongoDB Atlas connection string in the Render dashboard
+      - key: JWT_SECRET
+        generateValue: true    # Render generates a strong random secret
+      - key: JWT_EXPIRES_IN
+        value: 1d
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: CLIENT_ORIGIN
+        sync: false            # your Vercel URL, e.g. https://biteorder.vercel.app</pre>
+<p class="lab">client/vercel.json (single-page-app routing)</p><pre>{
+  &quot;rewrites&quot;: [{ &quot;source&quot;: &quot;/(.*)&quot;, &quot;destination&quot;: &quot;/index.html&quot; }]
+}</pre>
+<table><tr><th>Platform</th><th>Configuration</th></tr><tr><td>Render (Web Service, Docker)</td><td>Root directory <code>server</code>, Dockerfile <code>./Dockerfile</code>, health check <code>/health</code>, plan Free. Environment variables: <code>NODE_ENV</code>, <code>MONGODB_URI</code> (MongoDB Atlas connection string), <code>JWT_SECRET</code> (generated), <code>JWT_EXPIRES_IN</code>, <code>ADMIN_EMAIL</code>, <code>ADMIN_PASSWORD</code>, <code>CLIENT_ORIGIN</code> (the Vercel URL).</td></tr><tr><td>Vercel (Vite project)</td><td>Root directory <code>client</code>, framework Vite, build command <code>npm run build</code>, output directory <code>dist</code>. Environment variable <code>VITE_API_BASE</code> = the Render URL, so the frontend knows where the API is.</td></tr><tr><td>Order</td><td>Deploy Render first, copy its URL into Vercel as <code>VITE_API_BASE</code>, deploy Vercel, then put the Vercel URL into Render as <code>CLIENT_ORIGIN</code> (CORS) and redeploy.</td></tr></table>
+<h3>4.8 Problems found while testing the containers, and their fixes</h3>
+<p>Building and running the stack for real exposed three problems that would also have broken the deployment:</p>
+<table><tr><th>Problem</th><th>Cause</th><th>Fix</th></tr><tr><td>Frontend image failed: "Cannot find native binding" in <code>npm run build</code></td><td><code>client/package-lock.json</code> had been generated on a Mac and listed only the macOS build of the Rolldown bundler (<code>@rolldown/binding-darwin-arm64</code>). On Linux (Docker, GitHub Actions, Vercel) the matching binary was missing (npm bug 4828).</td><td>Deleted <code>node_modules</code> and the lock file and ran <code>npm install</code> again. The lock file now lists all 16 platform bindings, including <code>linux-x64-gnu</code> and <code>linux-arm64-musl</code>; <code>npm ci</code> and the Docker build now pass.</td></tr><tr><td><code>web</code> container stayed "starting" and never became healthy</td><td>The health check used <code>wget http://localhost/</code>. On Alpine <code>localhost</code> resolves to the IPv6 address <code>::1</code>, but nginx listens only on IPv4.</td><td>Health checks now use <code>http://127.0.0.1/</code> (frontend) and <code>http://127.0.0.1:5001/health</code> (API). All three containers report <code>healthy</code>.</td></tr><tr><td><code>http://localhost:8080</code> returned 403 from another program</td><td>Port 8080 on the development machine was already used by a Java server, so the browser never reached the frontend container.</td><td>The host port is now configurable: <code>WEB_PORT</code> in <code>.env</code> (default 8080), also used for <code>CLIENT_ORIGIN</code>. The run below used <code>WEB_PORT=8088</code>.</td></tr></table>
+<div class="pb"></div>
+<h2>5. Screenshots</h2>
+<h3>5.1 Docker configuration and running containers</h3>
+<p>The images were built and the stack was started with <code>docker compose up --build -d</code> (Colima Docker engine on the development Mac). Real terminal output:</p>
+<div class="shot"><img src="file:///Users/ronitahuja/Desktop/FSD/Restaurant ordering system/screenshots/exp-8/d1_compose_up_ps.png" style="width:640px"><p class="cap">Figure 1: docker compose up --build -d, and docker compose ps – mongo, api and web are all up and healthy.</p></div>
+<div class="shot"><img src="file:///Users/ronitahuja/Desktop/FSD/Restaurant ordering system/screenshots/exp-8/d2_images_health_user.png" style="width:640px"><p class="cap">Figure 2: image sizes (api 247 MB, web 77 MB), health status of the three containers and the API running as the non-root user &quot;node&quot;.</p></div>
+<div class="shot"><img src="file:///Users/ronitahuja/Desktop/FSD/Restaurant ordering system/screenshots/exp-8/d3_http_checks.png" style="width:640px"><p class="cap">Figure 3: API /health, the frontend served by nginx (including React-Router fallback), the seeded menu (12 dishes) and the CORS header for the frontend origin.</p></div>
+<h3>5.2 GitHub Actions CI pipeline</h3>
+<p>Every job of the workflow was first run in the same way locally: the API tests in a clean Node 20 container against MongoDB (12 of 12 tests passed), the production build of the frontend, and both Docker image builds.</p>
+<div class="shot"><img src="file:///Users/ronitahuja/Desktop/FSD/Restaurant ordering system/screenshots/exp-8/g1_local_ci_equivalent.png" style="width:640px"><p class="cap">Figure 4: the CI jobs run locally – API tests 12/12 passed, frontend production build, and both docker build jobs succeeded.</p></div>
+<div class="ph">[ INSERT SCREENSHOT: GitHub → Actions tab: the workflow run &quot;CI / CD&quot; with all jobs green (server-tests, client-build, docker-build, deploy) ]</div>
+<h3>5.3 Backend deployment on Render</h3>
+<div class="ph">[ INSERT SCREENSHOT: Render dashboard: web service biteorder-api – status Live, with the service URL and the /health response ]</div>
+<h3>5.4 Frontend deployment on Vercel</h3>
+<div class="ph">[ INSERT SCREENSHOT: Vercel dashboard: project BiteOrder – deployment Ready, with the production URL ]</div>
+<h3>5.5 BiteOrder running online</h3>
+<div class="ph">[ INSERT SCREENSHOT: Browser: the live Vercel URL showing the BiteOrder menu loaded from the Render API ]</div>
+<h2>6. Conclusion</h2>
+<p>BiteOrder was containerized with Docker: the Node.js API runs from a small non-root image, and the React frontend is built in a multi-stage build and served by nginx. Docker Compose starts MongoDB, the API and the frontend with one command, and all three containers pass their health checks. A GitHub Actions workflow tests the API, builds the frontend, builds both images and triggers the Render deployment, while Vercel deploys the frontend from the same repository. Testing the containers for real also uncovered and fixed three problems (a platform-specific lock file, an IPv6 health-check failure and a port conflict) that would otherwise have failed in CI and in production.</p>
+</body></html>

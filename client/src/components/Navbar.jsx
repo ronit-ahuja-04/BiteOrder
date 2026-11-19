@@ -1,5 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useCart } from '../context/CartContext';
+import AuthNav from './AuthNav';
+import NotificationBell from './NotificationBell';
 
 export default function Navbar({
   searchTerm,
@@ -7,8 +9,10 @@ export default function Navbar({
   selectedCategory,
   onOpenInspector,
   onOpenTableModal,
+  onOpenApiTester,
 }) {
   const { tableNumber, totalItemCount, finalTotal, setIsCartOpen } = useCart();
+  const [menuOpen, setMenuOpen] = useState(false);
 
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs transition-all">
@@ -66,13 +70,13 @@ export default function Navbar({
             </div>
           </div>
 
-          {/* Right Action Controls: Table Badge, Lab Helper, Cart Button */}
-          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+          {/* Right Action Controls: Table Badge, REST API Console, Lab Helper, Cart Button */}
+          <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
             
             {/* Table Badge */}
             <button
               onClick={onOpenTableModal}
-              className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl bg-orange-50 hover:bg-orange-100 border border-orange-200 text-[#E8590C] transition-colors group cursor-pointer"
+              className="hidden xl:flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl bg-orange-50 hover:bg-orange-100 border border-orange-200 text-[#E8590C] transition-colors group cursor-pointer"
               title="Click to switch table"
             >
               <span className="text-sm sm:text-base">🪑</span>
@@ -82,15 +86,29 @@ export default function Navbar({
               </div>
             </button>
 
+            {/* REST API Tester Console Button (Experiment 4) */}
+            <button
+              onClick={onOpenApiTester}
+              className="hidden xl:flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-semibold transition-all border border-emerald-200 shadow-xs cursor-pointer"
+              title="Open RESTful API Console (Node.js + Express Testing)"
+            >
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span className="hidden sm:inline font-bold">API Console</span>
+              <span className="text-[10px] bg-emerald-200 text-emerald-800 px-1 rounded font-mono font-bold">Exp 4</span>
+            </button>
+
             {/* Tailwind Classes Inspector Button */}
             <button
               onClick={onOpenInspector}
-              className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-all border border-slate-300 shadow-xs cursor-pointer"
+              className="hidden xl:flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-all border border-slate-300 shadow-xs cursor-pointer"
               title="View Tailwind Utility Classes Experiment Breakdown"
             >
               <span className="text-sm">⚡</span>
-              <span className="hidden lg:inline">Tailwind Lab</span>
+              <span className="hidden xl:inline">Tailwind</span>
             </button>
+
+            <NotificationBell />
+            <div className="hidden xl:block"><AuthNav /></div>
 
             {/* Cart Button */}
             <button
@@ -113,9 +131,29 @@ export default function Navbar({
               </div>
             </button>
 
+            {/* Hamburger: below desktop width the extra controls move into this menu */}
+            <button
+              onClick={() => setMenuOpen((o) => !o)}
+              aria-label="Open menu"
+              aria-expanded={menuOpen}
+              className="xl:hidden w-10 h-10 rounded-xl border border-slate-300 bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-lg transition-colors cursor-pointer"
+            >
+              {menuOpen ? '✕' : '☰'}
+            </button>
+
           </div>
 
         </div>
+
+        {/* Collapsible menu (mobile / tablet) */}
+        {menuOpen && (
+          <div id="mobile-menu" className="xl:hidden pb-3 pt-3 border-t border-slate-200 flex flex-wrap items-center gap-2">
+            <button onClick={() => { setMenuOpen(false); onOpenTableModal(); }} className="px-3 py-2 rounded-xl bg-orange-50 border border-orange-200 text-xs font-bold text-[#E8590C] cursor-pointer">🪑 Table T-{tableNumber}</button>
+            <button onClick={() => { setMenuOpen(false); onOpenApiTester(); }} className="px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-bold text-emerald-700 cursor-pointer">API Console</button>
+            <button onClick={() => { setMenuOpen(false); onOpenInspector(); }} className="px-3 py-2 rounded-xl bg-slate-100 border border-slate-300 text-xs font-bold text-slate-700 cursor-pointer">⚡ Tailwind</button>
+            <AuthNav />
+          </div>
+        )}
 
         {/* Mobile Search Input (Visible on mobile: md:hidden) */}
         <div className="md:hidden pb-3 pt-1">

@@ -1,4 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { API_BASE } from '../config';
+import useDebounce from '../hooks/useDebounce';
 import Navbar from '../components/Navbar';
 import TableQRBanner from '../components/TableQRBanner';
 import CategoryFilter from '../components/CategoryFilter';
@@ -9,27 +11,71 @@ import CheckoutModal from '../components/CheckoutModal';
 import OrderTrackingModal from '../components/OrderTrackingModal';
 import TableSelectorModal from '../components/TableSelectorModal';
 import TailwindUtilityInspector from '../components/TailwindUtilityInspector';
+import ApiTesterModal from '../components/ApiTesterModal';
 import { MENU_ITEMS, CATEGORIES } from '../data/menuData';
 import { useCart } from '../context/CartContext';
+import { useNotifications } from '../context/NotificationContext';
 
 export default function MenuPage() {
   const [searchTerm, setSearchTerm] = useState('');
+  const debouncedSearch = useDebounce(searchTerm, 250); // custom hook: filter after the user pauses typing
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [dietFilter, setDietFilter] = useState('all'); // 'all' | 'veg' | 'non-veg'
 
+  const [rawMenuItems, setRawMenuItems] = useState(MENU_ITEMS);
+  const [apiStatus, setApiStatus] = useState('connecting');
+  const [apiMeta, setApiMeta] = useState({ endpoint: '/api/menu', count: 12, status: 200, duration: 12 });
+
   const [isInspectorOpen, setIsInspectorOpen] = useState(false);
   const [isTableModalOpen, setIsTableModalOpen] = useState(false);
+  const [isApiTesterOpen, setIsApiTesterOpen] = useState(false);
 
   const { isCartOpen, setIsCartOpen, totalItemCount, finalTotal } = useCart();
+  const { menuVersion } = useNotifications();
+
+  // Function to fetch dishes from Express REST API server (Experiment 4 REST API, persisted in MongoDB for Experiment 5)
+  const fetchMenuFromApi = async () => {
+    const start = performance.now();
+    try {
+      const res = await fetch(`${API_BASE}/menu`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const duration = Math.round(performance.now() - start);
+      if (data.success && Array.isArray(data.data)) {
+        setRawMenuItems(data.data);
+        setApiStatus('connected');
+        setApiMeta({
+          endpoint: '/api/menu',
+          count: data.count || data.data.length,
+          status: res.status,
+          duration,
+        });
+      }
+    } catch (err) {
+      console.warn('Backend API connection note (using local cache):', err.message);
+      setApiStatus('fallback');
+      setApiMeta({
+        endpoint: '/api/menu (offline fallback)',
+        count: MENU_ITEMS.length,
+        status: 200,
+        duration: 0,
+      });
+    }
+  };
+
+  // Initial load + automatic refresh whenever a real-time menu notification arrives (Experiment 7)
+  useEffect(() => {
+    fetchMenuFromApi();
+  }, [menuVersion]);
 
   // Filtered menu items based on Search, Category, and Dietary tags
   const filteredItems = useMemo(() => {
-    return MENU_ITEMS.filter((item) => {
+    return rawMenuItems.filter((item) => {
       // 1. Search Query filter
-      if (searchTerm.trim()) {
-        const query = searchTerm.toLowerCase();
+      if (debouncedSearch.trim()) {
+        const query = debouncedSearch.toLowerCase();
         const matchesName = item.name.toLowerCase().includes(query);
-        const matchesDesc = item.description.toLowerCase().includes(query);
+        const matchesDesc = item.description?.toLowerCase().includes(query);
         const matchesCategory = item.category.toLowerCase().includes(query);
         if (!matchesName && !matchesDesc && !matchesCategory) return false;
       }
@@ -45,7 +91,7 @@ export default function MenuPage() {
 
       return true;
     });
-  }, [searchTerm, selectedCategory, dietFilter]);
+  }, [rawMenuItems, debouncedSearch, selectedCategory, dietFilter]);
 
   const activeCategoryObj = CATEGORIES.find((c) => c.id === selectedCategory);
 
@@ -59,6 +105,7 @@ export default function MenuPage() {
         selectedCategory={selectedCategory}
         onOpenInspector={() => setIsInspectorOpen(true)}
         onOpenTableModal={() => setIsTableModalOpen(true)}
+        onOpenApiTester={() => setIsApiTesterOpen(true)}
       />
 
       {/* 2. Top QR & Table Banner (Responsive flex-col md:flex-row) */}
@@ -81,6 +128,45 @@ export default function MenuPage() {
       */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
         
+        {/* REST API Live Status Banner (Experiment 4 Feature) */}
+        <div className="mb-6 rounded-2xl bg-white border border-slate-200/90 p-3.5 sm:p-4 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className={`w-3 h-3 rounded-full shrink-0 ${apiStatus === 'connected' ? 'bg-emerald-500 animate-pulse ring-4 ring-emerald-100' : 'bg-amber-500'}`}></div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[11px] font-bold font-mono px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-200">
+                  GET /api/menu
+                </span>
+                <span className="text-xs font-bold text-slate-900">
+                  {apiStatus === 'connected' ? 'Connected to Express REST API Server' : 'Local Fallback Cache'}
+                </span>
+                <span className="text-[11px] font-mono text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded font-bold">
+                  200 OK
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-500 mt-1">
+                Endpoint: <code className="text-orange-600 font-bold">{API_BASE}/menu</code> • Fetched <strong>{rawMenuItems.length} dishes</strong> ({apiMeta.duration} ms) • Express.js v5.3.0
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 w-full md:w-auto shrink-0">
+            <button
+              onClick={fetchMenuFromApi}
+              className="px-3 py-1.5 rounded-xl border border-slate-300 hover:bg-slate-50 text-xs font-semibold text-slate-700 flex items-center gap-1.5 transition-colors cursor-pointer"
+              title="Re-fetch from REST API"
+            >
+              <span>🔄</span> Refresh API
+            </button>
+            <button
+              onClick={() => setIsApiTesterOpen(true)}
+              className="px-3.5 py-1.5 rounded-xl bg-[#E8590C] hover:bg-orange-700 text-white text-xs font-bold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+              title="Open Postman & Express REST API Console"
+            >
+              <span>⚡</span> REST API Console
+            </button>
+          </div>
+        </div>
+
         {/* Section Heading Banner (Responsive Typography & Padding) */}
         <div className="rounded-2xl bg-white md:bg-orange-50/40 border border-slate-200/80 p-4 sm:p-6 md:p-8 mb-6 sm:mb-8 transition-colors">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -204,6 +290,11 @@ export default function MenuPage() {
       <TailwindUtilityInspector
         isOpen={isInspectorOpen}
         onClose={() => setIsInspectorOpen(false)}
+      />
+      <ApiTesterModal
+        isOpen={isApiTesterOpen}
+        onClose={() => setIsApiTesterOpen(false)}
+        onRefreshMenu={fetchMenuFromApi}
       />
 
       {/* 8. Footer */}

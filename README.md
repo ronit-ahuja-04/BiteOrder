@@ -1,128 +1,158 @@
 # BiteOrder — Online Restaurant Ordering & Management System
 
-> **Full Stack Web Development (FSD) Laboratory**  
-> **Student Name:** Ronit Ahuja  
-> **Class / Division:** D15A  
-> **Roll No.:** 63  
-> **GitHub Repository:** [https://github.com/ronit-ahuja-04/BiteOrder.git](https://github.com/ronit-ahuja-04/BiteOrder.git)  
+> Full Stack Development mini project · **Ronit Ahuja** · Class D15A · Roll No. 63
+> Repository: https://github.com/ronit-ahuja-04/BiteOrder
 
----
+**Live links** – Frontend: `<add Vercel URL after deploying>` · Backend API: `<add Render URL after deploying>` · API health: `<render-url>/health`
 
-## 📌 Project Overview
+BiteOrder lets diners browse a live restaurant menu, customise dishes, order, and track their orders, while administrators manage the menu and see users and orders. Changes made by an admin appear instantly for every connected customer (real-time notifications).
 
-**BiteOrder** is an interactive, responsive online restaurant digital menu and ordering platform built using **React 19**, **Tailwind CSS v4**, and modern React Hooks. It enables restaurant diners to scan a table QR code, browse a categorized food menu (Starters, Mains, Breads, Desserts, Beverages), customize portion sizes and add-ons, add items to a persistent cart with real-time tax calculations, and track order stages (Received → Preparing → Ready → Served) with automatic lifecycle timers.
+## Features
 
----
+| Area | What it does |
+|---|---|
+| Menu & ordering | Category / veg filters, debounced search, dish customiser, cart with GST, checkout, order tracking |
+| Authentication | Register, login, logout, JWT sessions, protected pages |
+| Roles (RBAC) | `customer` and `admin`; admin dashboard to add / edit / delete dishes and view users and orders |
+| Real time | Socket.IO live notifications (toast, bell with unread count, menu refreshes by itself) |
+| Security | bcrypt, JWT, validation, helmet, rate limiting, CORS allow-list, ownership checks (IDOR-safe) |
+| Responsive UI | Phone, tablet and desktop layouts with a collapsible navigation menu |
 
-## 🧪 Experiments Index & Lab Reports
+## Tech stack
 
-This repository is maintained with clean, experiment-wise Git commits and full academic laboratory reports:
+React 19 · Vite · Tailwind CSS v4 · React Router · Context API (Auth, Cart, Notification, Toast) · Node.js 20 · Express 5 · MongoDB + Mongoose · JWT + bcryptjs · Socket.IO · express-validator · helmet · morgan · Docker · GitHub Actions
 
-| Experiment | Title | Key Technologies / Concepts | Detailed Lab Report |
-|---|---|---|---|
-| **Experiment 2** | **Responsive Menu & Card Design** | React Components, Tailwind CSS v4 utility classes (Typography, Colors, Spacing, Borders, Shadows, Flexbox & Grid), Responsive Viewports (Mobile, Tablet, Desktop) | [EXPERIMENT_2_REPORT.md](./EXPERIMENT_2_REPORT.md) |
-| **Experiment 3** | **Interactive State Management using React Hooks** | `useState` (local inputs, modals), `useEffect` (localStorage sync, status timers), `useContext` (CartContext global state), Memoization (`useMemo`) | [EXPERIMENT_3_REPORT.md](./EXPERIMENT_3_REPORT.md) |
-
----
-
-## 🪵 Git Commit History (Experiment-Wise)
-
-The repository follows a clean, structured commit tree for lab evaluation:
+## Architecture
 
 ```
-* 63c8535 (HEAD -> main, origin/main) feat(exp-3): Development of Interactive Restaurant Ordering Application using React Hooks and State Management
-* 187c5c1 feat(exp-2): Development of Responsive Restaurant Menu & Ordering Page using React Components and Tailwind CSS
-* 85813ef feat: Initial setup for BiteOrder restaurant ordering system with React 19, Tailwind CSS v4, and Express API
+┌────────────────────────┐   HTTPS / JSON (REST)    ┌──────────────────────────────┐        ┌───────────────┐
+│  React SPA (Vite)      │ ───────────────────────► │  Express API  (server/)      │ ─────► │  MongoDB       │
+│  Tailwind · Router     │ ◄─────────────────────── │  routes → middleware →       │ ◄───── │  (Atlas)       │
+│  Context API + hooks   │                          │  controllers → Mongoose      │        │ users · orders │
+│                        │   WebSocket (Socket.IO)  │  auth · validate · errors    │        │ · menuitems    │
+│  Vercel / nginx        │ ◄═══════════════════════ │  io.emit("notification")     │        └───────────────┘
+└────────────────────────┘                          └──────────────────────────────┘
+                                                       Render / Docker
 ```
 
-### Commit Details:
-1. **Initial Setup (`85813ef`)**:
-   - Project directory scaffolding (`client/` with Vite + React 19 + Tailwind CSS, `server/` with Express REST API).
-   - `.gitignore`, package configurations, and initial data structures.
-2. **Experiment 2 (`187c5c1`)**:
-   - Responsive multi-device layout (Mobile `< 768px`, Tablet `768px-1023px`, Desktop `≥ 1024px`).
-   - Reusable `MenuCard` with dietary badges (Veg/Non-Veg dot indicators), ratings, price tags, and hover micro-animations.
-   - Demonstration of 12 core Tailwind CSS utility classes.
-   - Comprehensive `EXPERIMENT_2_REPORT.md` including theoretical Q&A, wireframes, and code listings.
-3. **Experiment 3 (`63c8535`)**:
-   - `CartContext.jsx` with Context API for centralized order management.
-   - `useState` for search query, category filtering, dietary toggle, customization modal options, and order details.
-   - `useEffect` for `localStorage` order synchronization and automated interval timers in `OrderTrackingModal`.
-   - `useMemo` for derived subtotal, GST (5%), discount calculations, and filtered item arrays.
-   - Comprehensive `EXPERIMENT_3_REPORT.md` including 15 theory questions, React hooks architecture, state flow diagrams, and verified test cases.
+Request flow: `route → (protect → adminOnly) → validation rules → controller → Mongoose model → JSON response`, with one central error handler at the end.
 
----
-
-## 📐 Architecture & Key Components
+### Folder structure
 
 ```
-client/src/
-├── App.jsx                     # Root component wrapping CartProvider and MenuPage
-├── context/
-│   └── CartContext.jsx         # Context API (useState, useEffect, useMemo, custom useCart hook)
-├── components/
-│   ├── Navbar.jsx              # Brand header, Table QR badge, search bar, and cart drawer trigger
-│   ├── TableQRBanner.jsx       # QR detection strip (Table #12, Dine-in mode)
-│   ├── CategoryFilter.jsx      # Interactive category pills & Veg / Non-Veg toggles
-│   ├── MenuCard.jsx            # Dish card with image, badges, price, and add-to-cart stepper
-│   ├── ItemCustomizerModal.jsx # Size selection, add-on checkboxes, and special instructions
-│   ├── CartSidebar.jsx         # Desktop sticky cart with item breakdown, coupon, and bill calculation
-│   ├── CheckoutModal.jsx       # Customer details modal (Name, Mobile, Payment method selection)
-│   ├── OrderTrackingModal.jsx  # Live order stepper with automated useEffect interval progression
-│   └── TailwindUtilityInspector.jsx # In-app inspector for Tailwind CSS utility classes
-└── data/
-    └── menuData.js             # Comprehensive menu catalog with high-res Unsplash food images
+.
+├── client/                  React + Tailwind frontend
+│   └── src/
+│       ├── components/      Navbar, NotificationBell, ProtectedRoute, Spinner, modals ...
+│       ├── context/         AuthContext, CartContext, NotificationContext, ToastContext
+│       ├── hooks/           useFetch, useDebounce            (custom hooks)
+│       ├── pages/           MenuPage, Login, Register, Profile, MyOrders, AdminDashboard
+│       └── utils/           form validators
+├── server/                  Express API
+│   ├── app.js               middleware + routes (testable, no listen)
+│   ├── server.js            HTTP + Socket.IO server, DB connection
+│   ├── config/              db.js, ensureAdmin.js
+│   ├── controllers/  routes/  middleware/  models/  seed/  test/
+├── docs/                    API.md · DATABASE.md · CHECKLIST.md
+├── .github/workflows/       ci.yml  (tests, build, docker, deploy)
+├── docker-compose.yml  render.yaml  BiteOrder_Postman_Collection.json
+└── screenshots/
 ```
 
----
+## Installation (local)
 
-## 🚀 How to Run Locally
+Requirements: Node.js 20+, a MongoDB (local or Atlas).
 
-### Prerequisites
-- **Node.js**: v18.0.0 or higher
-- **npm**: v9.0.0 or higher
+```bash
+git clone https://github.com/ronit-ahuja-04/BiteOrder.git
+cd BiteOrder
 
-### Steps
+# 1) API
+cd server
+cp .env.example .env          # then edit the values (see table below)
+npm install
+npm run seed                  # 12 sample dishes
+npm start                     # http://localhost:5001  (creates the admin account on first start)
 
-1. **Clone the Repository:**
-   ```bash
-   git clone https://github.com/ronit-ahuja-04/BiteOrder.git
-   cd BiteOrder
-   ```
+# 2) Frontend (new terminal)
+cd client
+npm install
+npm run dev                   # http://localhost:5173
+```
 
-2. **Install Dependencies:**
-   ```bash
-   # Install root and client dependencies
-   npm install
-   npm --prefix client install
-   ```
+### Environment variables
 
-3. **Start the Frontend Development Server:**
-   ```bash
-   npm run dev
-   # or
-   npm --prefix client run dev
-   ```
-   Open your browser at `http://localhost:5173/`.
+| Variable (`server/.env`) | Purpose |
+|---|---|
+| `PORT` | API port (default 5001) |
+| `MONGODB_URI` | MongoDB connection string (Atlas or local) |
+| `JWT_SECRET` | long random string used to sign tokens |
+| `JWT_EXPIRES_IN` | token lifetime, e.g. `1d` |
+| `ADMIN_EMAIL`, `ADMIN_PASSWORD` | admin account created automatically on server start |
+| `CLIENT_ORIGIN` | allowed frontend origin(s) for CORS, comma separated (production) |
 
-4. **Build for Production:**
-   ```bash
-   npm --prefix client run build
-   ```
+Frontend: `VITE_API_BASE` (default `http://localhost:5001`) – set it to the deployed API URL when building.
 
----
+> **Never commit `.env`** – it is git-ignored; only `.env.example` files with placeholders are committed.
 
-## 📱 Responsive Breakpoints Tested
+### Sample users
 
-- **Mobile Viewport (< 768px):** Single-column menu grid (`grid-cols-1`), compact navbar, collapsible search, floating bottom cart checkout bar.
-- **Tablet Viewport (768px – 1023px):** Two-column menu grid (`sm:grid-cols-2`), comfortable touch targets, sliding slide-over cart drawer.
-- **Desktop Viewport (≥ 1024px):** Three-column menu grid (`xl:grid-cols-3`) with fixed right-hand sticky billing and checkout sidebar (`col-span-4`).
+| Role | Email | Password |
+|---|---|---|
+| Customer | `demo.user@biteorder.com` | `Demo@1234` (create with `npm run seed:demo`) |
+| Admin | value of `ADMIN_EMAIL` | value of `ADMIN_PASSWORD` in your `.env` |
 
----
+## Scripts
 
-## 👨‍💻 Author
+| Where | Command | Does |
+|---|---|---|
+| server | `npm start` / `npm run dev` | run API (dev = nodemon) |
+| server | `npm test` | API test-suite (auth, RBAC, validation, CRUD, IDOR) – needs MongoDB (`TEST_MONGODB_URI`, default `mongodb://127.0.0.1:27017/biteorder_test`) |
+| server | `npm run seed`, `seed:admin`, `seed:demo` | sample data |
+| client | `npm run dev` / `npm run build` | dev server / production build |
 
-- **Student:** Ronit Ahuja
-- **Roll Number:** 63
-- **Class:** D15A
-- **Department:** Computer Engineering / Full Stack Development Lab
+## Docker
+
+```bash
+cp .env.docker.example .env      # set JWT_SECRET and ADMIN_PASSWORD
+docker compose up --build
+# frontend → http://localhost:8080     API → http://localhost:5001     MongoDB runs in a container
+```
+`server/Dockerfile` (Node 20 alpine, non-root user, health check), `client/Dockerfile` (multi-stage: Vite build → nginx), `.dockerignore` files keep secrets and `node_modules` out of the images.
+
+## Deployment (Atlas + Render + Vercel)
+
+1. **Database – MongoDB Atlas:** create a free cluster and a database user; *Network Access →* allow `0.0.0.0/0` (Render has no fixed IP); copy the connection string.
+2. **Backend – Render:** *New → Blueprint →* select this repo (uses `render.yaml`) or *New → Web Service → Docker* with root directory `server`. Set `MONGODB_URI`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `CLIENT_ORIGIN` (the Vercel URL). `JWT_SECRET` is generated. Check `/health`.
+3. **Frontend – Vercel:** import the repo, root directory `client`, framework *Vite*, environment variable `VITE_API_BASE=<Render URL>`. `vercel.json` handles the SPA routes.
+4. **CI/CD:** `.github/workflows/ci.yml` runs the API tests (with a MongoDB service), the frontend build and the Docker builds on every push/PR; on `main` it triggers the Render deploy hook (add the `RENDER_DEPLOY_HOOK` repository secret) while Vercel deploys from Git automatically.
+
+## Documentation
+
+- **API reference:** [docs/API.md](docs/API.md) · Postman collection: [BiteOrder_Postman_Collection.json](BiteOrder_Postman_Collection.json)
+- **Database schema:** [docs/DATABASE.md](docs/DATABASE.md)
+- **Checklist coverage:** [docs/CHECKLIST.md](docs/CHECKLIST.md)
+
+## Screenshots
+
+| | |
+|---|---|
+| Menu – mobile ![mobile](screenshots/responsive/menu_mobile.png) | Menu – desktop ![desktop](screenshots/responsive/menu_desktop.png) |
+| Admin dashboard ![admin](screenshots/responsive/admin_desktop.png) | Live notification bell ![bell](screenshots/exp-7/e5_dropdown.png) |
+
+## Lab experiments built into this project
+
+| Exp | Topic |
+|---|---|
+| 2 | Responsive UI with React + Tailwind CSS |
+| 3 | State management with hooks and Context |
+| 4 | REST API with Express and Postman |
+| 5 | MongoDB + Mongoose persistence |
+| 6 | JWT authentication and role-based authorization |
+| 7 | Real-time features with Socket.IO |
+| IDOR | Broken access control assessment and fix (`/api/profiles/:id`, `/api/orders/:id`) |
+
+
+## Day 16 – Firebase Integration & Real-time Features
+
+A Firebase-powered **Staff Hub** (`/firebase`) provides email + Google auth, a Firestore profile, real-time chat, a collaborative prep list and Storage image uploads, behind a protected route. Setup guide: [docs/FIREBASE_SETUP.md](docs/FIREBASE_SETUP.md).

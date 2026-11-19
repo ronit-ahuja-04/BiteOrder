@@ -1,0 +1,357 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>Experiment 6</title><style>@page{size:A4;margin:18mm}body{font:11pt/1.4 Arial,Helvetica,sans-serif;color:#000;margin:0}h1{font-size:18pt;margin:0 0 8px}h2{font-size:14pt;margin:18px 0 6px}h3{font-size:12pt;margin:14px 0 6px;break-after:avoid}h2{break-after:avoid}p{margin:0 0 6px}p.q{font-weight:bold;margin:10px 0 3px;break-after:avoid}p.lab{font-weight:bold;margin:12px 0 4px;break-after:avoid}.li{margin:0 0 3px 22px}code{font-family:Courier New,monospace;font-size:10pt}pre{font:8.5pt/1.25 Courier New,monospace;background:#f3f3f3;padding:6px 8px;margin:4px 0;white-space:pre-wrap;word-break:break-word}table{border-collapse:collapse;width:100%;margin:4px 0;break-inside:avoid}th,td{border:1px solid #000;padding:3px 6px;text-align:left;vertical-align:top;font-size:10.5pt}.gap{height:8px}.pb{break-after:page}.shot{break-inside:avoid;margin:2px 0 10px}.shot img{max-width:100%;border:1px solid #bbb}</style></head><body><h1>Experiment – 6</h1>
+<p><b>Implementation of JWT Authentication and Role-Based Authorization</b></p>
+<table><tr><th>Field</th><th>Details</th></tr><tr><td>Student Name</td><td>Ronit Ahuja</td></tr><tr><td>Class &amp; Division</td><td>D15A</td></tr><tr><td>Roll Number</td><td>63</td></tr><tr><td>Date</td><td>14/11/2026</td></tr><tr><td>Project</td><td>BiteOrder – Online Restaurant Ordering &amp; Management System (Mini Project)</td></tr><tr><td>Technology Stack</td><td>React, Node.js, Express.js, MongoDB, Mongoose, bcryptjs, jsonwebtoken</td></tr></table>
+<h2>1. Aim</h2>
+<p>To implement user authentication using JSON Web Tokens (JWT) and role-based authorization in a web application using React, Node.js, Express.js and MongoDB.</p>
+<h2>2. Problem Statement</h2>
+<p>Implement a secure authentication system in the BiteOrder restaurant ordering application (mini project). Develop user registration and login, store passwords using bcrypt hashing, generate and verify JWT tokens, and implement role-based access control (customer and admin) to restrict access to protected routes and administrative operations. Integrate authentication with the React frontend and test the functionality using an HTTP client (Postman).</p>
+<h2>3. Theory Questions</h2>
+<p class="q">1. What is JWT? Explain its structure and purpose.</p>
+<p>A JSON Web Token (JWT) is a compact, URL-safe string used to securely transmit claims between a client and a server. After login the server issues a token; the client sends it with every later request, so the server does not need to keep session state.</p>
+<p>Structure: three Base64URL parts separated by dots – <b>Header.Payload.Signature</b>.</p>
+<div class="li">&bull; <b>Header:</b> token type and signing algorithm, e.g. {"alg":"HS256","typ":"JWT"}.</div>
+<div class="li">&bull; <b>Payload:</b> the claims, e.g. user id, role, issued-at (iat) and expiry (exp). It is encoded, not encrypted, so it must not contain secrets.</div>
+<div class="li">&bull; <b>Signature:</b> HMAC-SHA256 of header and payload using the secret key. It proves the token was issued by the server and has not been modified.</div>
+<p class="q">2. Differentiate between authentication and authorization.</p>
+<p><b>Authentication</b> answers "Who are you?" – it verifies identity (email and password, then a JWT). <b>Authorization</b> answers "What are you allowed to do?" – it decides which resources the verified user can access (for example, only an admin may create menu items).</p>
+<p>Authentication happens first; authorization is applied afterwards using the identity (and role) that authentication established. Failing authentication gives 401; failing authorization gives 403.</p>
+<p class="q">3. Why are passwords hashed? What is the purpose of bcrypt?</p>
+<p>Passwords are never stored as plain text. If the database leaks, plain-text passwords would expose every account (and other sites where users reuse the password). A hash is a one-way function, so the original password cannot be recovered from it.</p>
+<p><b>bcrypt</b> is a password-hashing algorithm that adds a random salt to each password (so identical passwords produce different hashes) and is deliberately slow with a configurable cost factor (we use 10 salt rounds), which makes brute-force and rainbow-table attacks impractical. bcrypt.compare() checks a login attempt against the stored hash.</p>
+<p class="q">4. Explain the purpose of JWT signing and verification.</p>
+<p><b>Signing</b> (jwt.sign) happens at login/registration: the server creates the token and signs header + payload with JWT_SECRET, also setting an expiry (JWT_EXPIRES_IN).</p>
+<p><b>Verification</b> (jwt.verify) happens on each protected request: the server recomputes the signature with the same secret. If the token was tampered with, signed with another key, or has expired, verification throws and the request is rejected with 401. Only the server knows the secret, so clients cannot forge tokens or change their role.</p>
+<p class="q">5. What is middleware in Express.js? Explain its role in JWT authentication.</p>
+<p>Middleware is a function with the signature (req, res, next) that runs between the incoming request and the final route handler. It can read or modify req/res, end the request, or call next() to pass control on.</p>
+<p>In JWT authentication the <b>protect</b> middleware reads the Authorization header, verifies the token, loads the user, attaches it as req.user and calls next(); otherwise it returns 401. The <b>adminOnly</b> middleware then checks req.user.role and returns 403 for non-admins. Routes are protected by chaining them: router.post("/menu", protect, adminOnly, createMenuItem).</p>
+<p class="q">6. What is the purpose of Bearer Token in the Authorization header?</p>
+<p>The Authorization header carries the credentials for each request in the form <b>Authorization: Bearer &lt;token></b>. "Bearer" means whoever bears (holds) the token is granted access, so the server only has to verify the token – no username/password is sent again. Because anyone holding the token can use it, it must be sent over HTTPS and kept short-lived.</p>
+<p class="q">7. Differentiate between HTTP status codes 401 and 403.</p>
+<p><b>401 Unauthorized</b> – the request has no valid authentication: missing, malformed, invalid or expired token, or wrong login credentials. The client should log in again.</p>
+<p><b>403 Forbidden</b> – the user is authenticated but not permitted to perform the action (for example, a customer calling an admin-only endpoint). Logging in again will not help.</p>
+<p class="q">8. What is role-based access control (RBAC)?</p>
+<p>RBAC grants permissions according to a user's role rather than to individual users. In BiteOrder each user has a role field – <b>customer</b> or <b>admin</b>. The role is stored in the database and in the JWT; middleware compares it with the role required by the route. This keeps authorization simple to manage: changing a user's role changes everything they can access.</p>
+<div class="pb"></div>
+<h2>4. Code</h2>
+<h3>4.1 JWT secret and expiry (server/.env)</h3>
+<p>The secret is a long random string kept only in .env (never committed). .env.example contains placeholders only.</p>
+<pre>PORT=5001
+MONGODB_URI=mongodb+srv://&lt;username>:&lt;password>@&lt;cluster>.mongodb.net/biteorder
+JWT_SECRET=&lt;long-random-string-kept-private>
+JWT_EXPIRES_IN=1d</pre>
+<h3>4.2 User model (server/models/User.js)</h3>
+<p>The schema validates the fields, stores the role (customer or admin), hides the password from query results (select: false) and hashes it in a pre-save hook.</p>
+<pre>const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
+
+const userSchema = new mongoose.Schema(
+  {
+    name: { type: String, required: [true, '"name" is a required field.'], trim: true, minlength: [2, '"name" must be at least 2 characters.'] },
+    email: {
+      type: String,
+      required: [true, '"email" is a required field.'],
+      unique: true,
+      lowercase: true,
+      trim: true,
+      match: [/^\S+@\S+\.\S+$/, '"email" must be a valid email address.'],
+    },
+    password: {
+      type: String,
+      required: [true, '"password" is a required field.'],
+      minlength: [6, '"password" must be at least 6 characters.'],
+      select: false, // never returned by queries unless explicitly requested
+    },
+    role: { type: String, enum: ['customer', 'admin'], default: 'customer' },
+  },
+  {
+    timestamps: true,
+    toJSON: { versionKey: false, transform: (_doc, ret) => { delete ret.password; return ret; } },
+  }
+);
+
+// Hash the password with bcrypt (10 salt rounds) before saving
+userSchema.pre('save', async function () {
+  if (!this.isModified('password')) return;
+  this.password = await bcrypt.hash(this.password, 10);
+});
+
+userSchema.methods.matchPassword = function (plain) {
+  return bcrypt.compare(plain, this.password);
+};
+
+module.exports = mongoose.model('User', userSchema);</pre>
+<h3>4.3 Password hashing and JWT generation (server/controllers/authController.js)</h3>
+<p>Registration creates the user (the model hashes the password; the role is always "customer", so users cannot make themselves admin). Login compares the password with bcrypt and returns a signed token.</p>
+<pre>const jwt = require('jsonwebtoken');
+const User = require('../models/User');
+
+const signToken = (user) =>
+  jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, {
+    expiresIn: process.env.JWT_EXPIRES_IN || '1d',
+  });
+
+const sendAuth = (res, status, user, message) =>
+  res.status(status).json({ success: true, message, token: signToken(user), user });
+
+// POST /api/auth/register  (role is always "customer"; admins are created via seed script)
+exports.register = async (req, res) => {
+  try {
+    const { name, email, password } = req.body;
+    if (await User.findOne({ email: String(email || '').toLowerCase() })) {
+      return res.status(409).json({ success: false, message: 'Email is already registered.' });
+    }
+    const user = await User.create({ name, email, password });
+    sendAuth(res, 201, user, 'Registration successful.');
+  } catch (error) {
+    if (error.name === 'ValidationError') {
+      const msgs = Object.values(error.errors).map((e) => e.message).join(' ');
+      return res.status(400).json({ success: false, message: `Validation Error: ${msgs}` });
+    }
+    res.status(500).json({ success: false, message: 'Server error during registration', error: error.message });
+  }
+};
+
+// POST /api/auth/login
+exports.login = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ success: false, message: 'Email and password are required.' });
+    }
+    const user = await User.findOne({ email: String(email).toLowerCase() }).select('+password');
+    // same message for unknown email and wrong password (no user enumeration)
+    if (!user || !(await user.matchPassword(password))) {
+      return res.status(401).json({ success: false, message: 'Invalid email or password.' });
+    }
+    sendAuth(res, 200, user, 'Login successful.');
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server error during login', error: error.message });
+  }
+};
+
+// GET /api/auth/me  (protected)
+exports.getMe = (req, res) => res.status(200).json({ success: true, user: req.user });
+
+// GET /api/auth/users  (admin only)
+exports.getUsers = async (req, res) => {
+  const users = await User.find().sort({ createdAt: 1 });
+  res.status(200).json({ success: true, count: users.length, data: users });
+};</pre>
+<h3>4.4 Authentication and authorization middleware (server/middleware/auth.js)</h3>
+<p>protect verifies the Bearer token and loads the user; adminOnly allows only role = admin.</p>
+<pre>const jwt = require('jsonwebtoken');
+const User = require('../models/User');
+
+// protect: verifies the Bearer token and attaches the user to req.user
+const protect = async (req, res, next) => {
+  const header = req.headers.authorization || '';
+  if (!header.startsWith('Bearer ')) {
+    return res.status(401).json({ success: false, message: 'Not authorized: no token provided.' });
+  }
+  try {
+    const token = header.split(' ')[1];
+    const decoded = jwt.verify(token, process.env.JWT_SECRET); // throws if tampered or expired
+    const user = await User.findById(decoded.id);
+    if (!user) {
+      return res.status(401).json({ success: false, message: 'Not authorized: user no longer exists.' });
+    }
+    req.user = user;
+    next();
+  } catch (err) {
+    const message = err.name === 'TokenExpiredError' ? 'Not authorized: token expired.' : 'Not authorized: invalid token.';
+    res.status(401).json({ success: false, message });
+  }
+};
+
+// optionalAuth: attaches req.user when a valid token is sent, otherwise continues as guest
+const optionalAuth = async (req, res, next) => {
+  const header = req.headers.authorization || '';
+  if (header.startsWith('Bearer ')) {
+    try {
+      const decoded = jwt.verify(header.split(' ')[1], process.env.JWT_SECRET);
+      req.user = await User.findById(decoded.id);
+    } catch (_) { /* ignore invalid token for guests */ }
+  }
+  next();
+};
+
+// adminOnly: must run after protect; allows only role === 'admin'
+const adminOnly = (req, res, next) => {
+  if (req.user &amp;&amp; req.user.role === 'admin') return next();
+  res.status(403).json({ success: false, message: 'Forbidden: admin access required.' });
+};
+
+module.exports = { protect, optionalAuth, adminOnly };</pre>
+<h3>4.5 Routes (server/routes/authRoutes.js and menuRoutes.js)</h3>
+<pre>const express = require('express');
+const { register, login, getMe, getUsers } = require('../controllers/authController');
+const { protect, adminOnly } = require('../middleware/auth');
+
+const router = express.Router();
+router.post('/register', register);
+router.post('/login', login);
+router.get('/me', protect, getMe);
+router.get('/users', protect, adminOnly, getUsers);
+module.exports = router;</pre>
+<div class="gap"></div>
+<p>Existing API routes secured with the middleware (server/routes/menuRoutes.js):</p>
+<pre>// Public
+router.get('/menu', getMenu);
+router.get('/menu/:id', getMenuItemById);
+router.post('/orders', optionalAuth, placeOrder);   // guests allowed; links the order to the user if logged in
+
+// Logged-in users
+router.get('/orders/my', protect, getMyOrders);
+
+// Admin only
+router.post('/menu', protect, adminOnly, createMenuItem);
+router.put('/menu/:id', protect, adminOnly, updateMenuItem);
+router.delete('/menu/:id', protect, adminOnly, deleteMenuItem);
+router.get('/orders', protect, adminOnly, getAllOrders);
+router.put('/orders/:id', protect, adminOnly, updateOrderStatus);
+router.delete('/orders/:id', protect, adminOnly, deleteOrder);</pre>
+<div class="gap"></div>
+<p>server.js mounts the auth routes and a seed script creates the first admin:</p>
+<pre>app.use('/api/auth', authRoutes);
+app.use('/api', menuRoutes);
+
+// npm run seed:admin   ->  admin@biteorder.com (role: admin)</pre>
+<div class="gap"></div>
+<p>Access summary:</p>
+<table><tr><th>Endpoint</th><th>Access</th><th>Failure response</th></tr><tr><td>POST /api/auth/register, /login</td><td>Public</td><td>400 / 401 / 409</td></tr><tr><td>GET /api/auth/me</td><td>Any logged-in user</td><td>401</td></tr><tr><td>GET /api/auth/users</td><td>Admin only</td><td>401 / 403</td></tr><tr><td>POST, PUT, DELETE /api/menu</td><td>Admin only</td><td>401 / 403</td></tr><tr><td>GET /api/orders (all orders)</td><td>Admin only</td><td>401 / 403</td></tr><tr><td>GET /api/orders/my</td><td>Any logged-in user</td><td>401</td></tr></table>
+<h3>4.6 Integration with the React frontend</h3>
+<p>AuthContext stores the token in localStorage, verifies it on page load with GET /api/auth/me, and exposes login, register, logout and the current user. Other API calls (orders, admin pages, API console) send it as a Bearer header.</p>
+<pre>import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+
+const API = 'http://localhost:5001/api';
+const AuthContext = createContext(null);
+
+export const getToken = () => {
+  try { return localStorage.getItem('biteorder_token'); } catch { return null; }
+};
+
+export function AuthProvider({ children }) {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(!!getToken()); // true while validating a stored token
+
+  // On page load, verify the stored token with GET /api/auth/me
+  useEffect(() => {
+    const token = getToken();
+    if (!token) return;
+    fetch(`${API}/auth/me`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((d) => setUser(d.user))
+      .catch(() => localStorage.removeItem('biteorder_token'))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const authRequest = async (path, body) => {
+    const res = await fetch(`${API}/auth/${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Request failed');
+    localStorage.setItem('biteorder_token', data.token);
+    setUser(data.user);
+    return data.user;
+  };
+
+  const login = (email, password) => authRequest('login', { email, password });
+  const register = (name, email, password) => authRequest('register', { name, email, password });
+  const logout = useCallback(() => {
+    localStorage.removeItem('biteorder_token');
+    setUser(null);
+  }, []);
+
+  return (
+    &lt;AuthContext.Provider value={{ user, loading, login, register, logout, isAdmin: user?.role === 'admin' }}>
+      {children}
+    &lt;/AuthContext.Provider>
+  );
+}
+
+export const useAuth = () => useContext(AuthContext);</pre>
+<div class="gap"></div>
+<p>Login/registration pages call these functions (client/src/pages/LoginPage.jsx, RegisterPage.jsx) and the navbar (components/AuthNav.jsx) changes with the login state and role: Login/Register buttons for visitors; user name, role badge and Logout for signed-in users; an extra Admin Dashboard link for admins.</p>
+<h3>4.7 Protected frontend routes and role-based access</h3>
+<pre>import React from 'react';
+import { Navigate, useLocation, Link } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+
+// Blocks a page unless logged in (and, if adminOnly, unless role === 'admin')
+export default function ProtectedRoute({ children, adminOnly = false }) {
+  const { user, loading } = useAuth();
+  const location = useLocation();
+
+  if (loading) return &lt;div className="p-10 text-center text-slate-500">Checking session…&lt;/div>;
+  if (!user) return &lt;Navigate to="/login" replace state={{ from: location.pathname, reason: 'Please log in to access this page.' }} />;
+  if (adminOnly &amp;&amp; user.role !== 'admin') {
+    return (
+      &lt;div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
+        &lt;div className="max-w-md w-full bg-white border border-red-200 rounded-2xl p-8 text-center shadow-sm">
+          &lt;div className="text-5xl mb-3">🚫&lt;/div>
+          &lt;h1 className="text-2xl font-black text-slate-900">403 – Access Denied&lt;/h1>
+          &lt;p className="text-slate-600 mt-2 text-sm">
+            This page is restricted to administrators. You are signed in as &lt;strong>{user.name}&lt;/strong> ({user.role}).
+          &lt;/p>
+          &lt;Link to="/" className="inline-block mt-5 px-5 py-2.5 rounded-xl bg-[#E8590C] text-white font-bold text-sm">Back to Menu&lt;/Link>
+        &lt;/div>
+      &lt;/div>
+    );
+  }
+  return children;
+}</pre>
+<div class="gap"></div>
+<p>Route table (client/src/App.jsx):</p>
+<pre>&lt;Routes>
+  &lt;Route path="/" element={&lt;MenuPage />} />
+  &lt;Route path="/login" element={&lt;LoginPage />} />
+  &lt;Route path="/register" element={&lt;RegisterPage />} />
+  &lt;Route path="/my-orders" element={&lt;ProtectedRoute>&lt;MyOrdersPage />&lt;/ProtectedRoute>} />
+  &lt;Route path="/admin" element={&lt;ProtectedRoute adminOnly>&lt;AdminDashboard />&lt;/ProtectedRoute>} />
+&lt;/Routes></pre>
+<p>Visitors who are not logged in are redirected to /login; logged-in customers who open /admin see a 403 Access Denied page. The backend enforces the same rules, so the restriction cannot be bypassed from the browser.</p>
+<div class="pb"></div>
+<h2>5. Screenshots</h2>
+<p>Note: all screenshots were captured from a local run of the application against a local MongoDB instance. The API request/response images were produced with an HTTP client and show the real responses of the running server; the frontend images are of the running React application. Tokens are shortened and password hashes are masked.</p>
+<h3>A. Postman Authentication Testing</h3>
+<p class="lab">1. User registration (POST /api/auth/register) – 201 Created</p>
+<div class="shot"><img src="file:///Users/ronitahuja/Desktop/FSD/Restaurant ordering system/screenshots/exp-6/a1_register.png" style="width:600px"></div>
+<p class="lab">2. User login (POST /api/auth/login) – 200 OK, token returned</p>
+<div class="shot"><img src="file:///Users/ronitahuja/Desktop/FSD/Restaurant ordering system/screenshots/exp-6/a2_login.png" style="width:600px"></div>
+<p class="lab">3. Successful token verification (GET /api/auth/me) – 200 OK</p>
+<div class="shot"><img src="file:///Users/ronitahuja/Desktop/FSD/Restaurant ordering system/screenshots/exp-6/a3_me.png" style="width:600px"></div>
+<p class="lab">4. Invalid login credentials – 401 Unauthorized</p>
+<div class="shot"><img src="file:///Users/ronitahuja/Desktop/FSD/Restaurant ordering system/screenshots/exp-6/a4_badlogin.png" style="width:600px"></div>
+<p class="lab">5. Protected endpoint without a token – 401 Unauthorized</p>
+<div class="shot"><img src="file:///Users/ronitahuja/Desktop/FSD/Restaurant ordering system/screenshots/exp-6/a5_notoken.png" style="width:600px"></div>
+<p class="lab">6. Admin endpoint with a normal user's token – 403 Forbidden</p>
+<div class="shot"><img src="file:///Users/ronitahuja/Desktop/FSD/Restaurant ordering system/screenshots/exp-6/a6_user_admin.png" style="width:600px"></div>
+<p class="lab">Additional: creating a menu item with a normal user's token – 403 Forbidden</p>
+<div class="shot"><img src="file:///Users/ronitahuja/Desktop/FSD/Restaurant ordering system/screenshots/exp-6/b2_menu_post_user.png" style="width:600px"></div>
+<h3>B. Role-Based Authorization</h3>
+<p class="lab">7. Admin endpoint with an admin token (GET /api/auth/users) – 200 OK</p>
+<div class="shot"><img src="file:///Users/ronitahuja/Desktop/FSD/Restaurant ordering system/screenshots/exp-6/b1_admin_ok.png" style="width:600px"></div>
+<p class="lab">8. MongoDB users collection with roles (password hashes masked)</p>
+<div class="shot"><img src="file:///Users/ronitahuja/Desktop/FSD/Restaurant ordering system/screenshots/exp-6/b3_users.png" style="width:600px"></div>
+<h3>C. Frontend Integration</h3>
+<p class="lab">9a. Registration page</p>
+<div class="shot"><img src="file:///Users/ronitahuja/Desktop/FSD/Restaurant ordering system/screenshots/exp-6/c1_register.png" style="width:600px"></div>
+<p class="lab">9b. Login page</p>
+<div class="shot"><img src="file:///Users/ronitahuja/Desktop/FSD/Restaurant ordering system/screenshots/exp-6/c2_login.png" style="width:600px"></div>
+<p class="lab">10. Successful login – navbar shows the user name, role badge and Logout</p>
+<div class="shot"><img src="file:///Users/ronitahuja/Desktop/FSD/Restaurant ordering system/screenshots/exp-6/c3_navbar_customer.png" style="width:600px"></div>
+<p class="lab">11a. Protected page opened without login – redirected to login</p>
+<div class="shot"><img src="file:///Users/ronitahuja/Desktop/FSD/Restaurant ordering system/screenshots/exp-6/c4_protected_redirect.png" style="width:600px"></div>
+<p class="lab">11b. Admin-only page opened by a customer – 403 Access Denied</p>
+<div class="shot"><img src="file:///Users/ronitahuja/Desktop/FSD/Restaurant ordering system/screenshots/exp-6/c5_admin_denied.png" style="width:560px"></div>
+<p class="lab">11c. Protected page (My Orders) opened by the logged-in customer</p>
+<div class="shot"><img src="file:///Users/ronitahuja/Desktop/FSD/Restaurant ordering system/screenshots/exp-6/c6_my_orders.png" style="width:600px"></div>
+<p class="lab">12a. Admin login – navbar shows the ADMIN badge and Admin Dashboard link</p>
+<div class="shot"><img src="file:///Users/ronitahuja/Desktop/FSD/Restaurant ordering system/screenshots/exp-6/c7_navbar_admin.png" style="width:600px"></div>
+<p class="lab">12b. Admin Dashboard (admin only)</p>
+<div class="shot"><img src="file:///Users/ronitahuja/Desktop/FSD/Restaurant ordering system/screenshots/exp-6/c8_admin_dashboard.png" style="width:600px"></div>
+<h2>6. Conclusion</h2>
+<p>JWT authentication and role-based authorization were added to the BiteOrder application. Users can register and log in; passwords are hashed with bcrypt; the server signs and verifies JWTs with a secret and expiry kept in .env; the protect and adminOnly middleware return 401 for missing or invalid tokens and 403 for insufficient role; and the React frontend uses the token for session handling, role-aware navigation and protected routes.</p></body></html>
